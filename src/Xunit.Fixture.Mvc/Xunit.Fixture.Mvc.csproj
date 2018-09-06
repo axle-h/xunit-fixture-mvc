@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Title>xunit.fixture.mvc</Title>
+    <PackageId>xunit.fixture.mvc</PackageId>
+    <Authors>Alex Haslehurst</Authors>
+    <Description>MVC functional tests with a fixture pattern</Description>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageTags>test;testing;fixture;functional</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <IncludeSource>true</IncludeSource>
+    <PackageProjectUrl>https://github.com/axle-h/xunit-fixture-mvc</PackageProjectUrl>
+    <IsPackable>true</IsPackable>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DocumentationFile>bin\Release\netstandard2.0\Xunit.Fixture.Mvc.xml</DocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoFixture" Version="4.5.0" />
+    <PackageReference Include="FluentAssertions" Version="5.4.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="2.1.2" />
+    <PackageReference Include="xunit.core" Version="2.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="build\**\*.targets" Pack="true" PackagePath="%(Identity)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json" />
+  </ItemGroup>
+
+</Project>
