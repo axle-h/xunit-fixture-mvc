@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
@@ -29,12 +30,11 @@ namespace Xunit.Fixture.Mvc
         private readonly IList<Action<ITestOutputHelper, IConfigurationBuilder>> _configurationBuilderDelegates = new List<Action<ITestOutputHelper, IConfigurationBuilder>>();
         private readonly IList<Action<WebApplicationFactoryClientOptions>> _clientConfigurationDelegates = new List<Action<WebApplicationFactoryClientOptions>>();
         private readonly IList<Action<HttpResponseMessage>> _responseAssertions = new List<Action<HttpResponseMessage>>();
-        private readonly IList<Action<object>> _resultAssertions = new List<Action<object>>();
+        private readonly IDictionary<Type, IList<Action<object>>> _resultAssertions = new Dictionary<Type, IList<Action<object>>>();
         private readonly IList<(Type serviceType, Func<object, Task> assertion)> _postRequestAssertions = new List<(Type serviceType, Func<object, Task> assertion)>();
         private readonly HttpRequestMessage _message = new HttpRequestMessage();
 
         private bool _actStepConfigured;
-        private Type _resultType;
         private string _environment;
 
         /// <summary>
@@ -150,17 +150,14 @@ namespace Xunit.Fixture.Mvc
         /// <exception cref="ArgumentException">TResult</exception>
         public IMvcFunctionalTestFixture JsonResultShould<TResult>(params Action<TResult>[] assertions)
         {
-            if (_resultType != null && _resultType != typeof(TResult))
+            if (!_resultAssertions.TryGetValue(typeof(TResult), out var list))
             {
-                throw new ArgumentException($"Already added JSON assertions for {_resultType}", nameof(TResult));
+                list = _resultAssertions[typeof(TResult)] = new List<Action<object>>();
             }
-
-            // This implicitly adds an assertion that the result is a valid JSON representation of TResult.
-            _resultType = typeof(TResult);
 
             foreach (var assertion in assertions)
             {
-                _resultAssertions.Add(o => assertion(o.Should().BeAssignableTo<TResult>().Which));
+                list.Add(o => assertion(o.Should().BeAssignableTo<TResult>().Which));
             }
 
             return this;
@@ -229,22 +226,25 @@ namespace Xunit.Fixture.Mvc
                     }
 
                     // Response body (result) assertions.
-                    if (_resultType != null)
+                    if (_resultAssertions.Any())
                     {
                         var responseBody = await response.Content.ReadAsStringAsync();
                         logger.LogInformation("Received: " + responseBody);
 
-                        try
+                        foreach (var kvp in _resultAssertions)
                         {
-                            var result = JsonConvert.DeserializeObject(responseBody, _resultType);
-                            foreach (var assertion in _resultAssertions)
+                            try
                             {
-                                aggregator.Try(() => assertion(result));
+                                var result = JsonConvert.DeserializeObject(responseBody, kvp.Key);
+                                foreach (var assertion in kvp.Value)
+                                {
+                                    aggregator.Try(() => assertion(result));
+                                }
                             }
-                        }
-                        catch (JsonException e)
-                        {
-                            aggregator.Add(e);
+                            catch (JsonException e)
+                            {
+                                aggregator.Add(e);
+                            }
                         }
                     }
                     else
