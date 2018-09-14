@@ -86,7 +86,7 @@ namespace Xunit.Fixture.Mvc
         /// </summary>
         /// <typeparam name="TResult">The type of the result.</typeparam>
         /// <param name="assertions">The assertions.</param>
-        IMvcFunctionalTestFixture JsonResultShould<TResult>(params Action<TResult>[] assertions);
+        IMvcFunctionalTestFixture ShouldReturnJson<TResult>(params Action<TResult>[] assertions);
 
         /// <summary>
         /// Adds an assertion that will be run after the request has completed, resolving a service from DI.

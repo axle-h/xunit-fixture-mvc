@@ -148,7 +148,7 @@ namespace Xunit.Fixture.Mvc
         /// <typeparam name="TResult">The type of the result.</typeparam>
         /// <param name="assertions">The assertions.</param>
         /// <exception cref="ArgumentException">TResult</exception>
-        public IMvcFunctionalTestFixture JsonResultShould<TResult>(params Action<TResult>[] assertions)
+        public IMvcFunctionalTestFixture ShouldReturnJson<TResult>(params Action<TResult>[] assertions)
         {
             if (!_resultAssertions.TryGetValue(typeof(TResult), out var list))
             {
@@ -200,8 +200,6 @@ namespace Xunit.Fixture.Mvc
             using (var factory = new FixtureWebApplicationFactory(_output, loggerProvider, _environment, _extraServices, _configurationBuilderDelegates, _clientConfigurationDelegates))
             using (var client = factory.CreateClient()) // this actually builds the test server.
             {
-                
-
                 var logger = loggerProvider.CreateLogger(GetType().ToString());
 
                 // Bootstrap.

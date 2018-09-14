@@ -26,8 +26,14 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <returns></returns>
         public static ICollection<TModel> CreateMany<TModel>(this IMvcFunctionalTestFixture fixture) => fixture.AutoFixture.CreateMany<TModel>().ToList();
 
+        /// <summary>
+        /// Configures the HTTP client to have the specified path base.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="path">The path.</param>
+        /// <returns></returns>
         public static IMvcFunctionalTestFixture HavingPathBase(this IMvcFunctionalTestFixture fixture, string path) =>
-            fixture.HavingClientConfiguration(o => o.BaseAddress = new UriBuilder(o.BaseAddress)
+            fixture.HavingClientConfiguration(o => o.BaseAddress = new UriBuilder("http://localhost")
                                                                    {
                                                                        Path = path.TrimStart('/').TrimEnd('/') + '/'
                                                                    }.Uri);
