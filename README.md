@@ -9,16 +9,15 @@ For example:
 
 ```C#
 [Fact]
-public void When_creating_breakfast_item()
+public async Task When_creating_breakfast_item()
 {
-    using (var fixture = new MvcFunctionalTestFixture<Startup>(_output))
-    {
-        var request = new CreateOrUpdateBreakfastItemRequest { Name = "bacon", Rating = 10 };
-        fixture.WhenCreating("BreakfastItem", request)
-               .ShouldReturnSuccessfulStatus()
-               .JsonResultShould<BreakfastItem>(r => r.Id.Should().Be(1),
-                                                r => r.Name.Should().Be(request.Name),
-                                                r => r.Rating.Should().Be(request.Rating));
-    }
+    var request = new CreateOrUpdateBreakfastItemRequest { Name = "bacon", Rating = 10 };
+    var fixture = new MvcFunctionalTestFixture<Startup>(_output)
+            .WhenCreating("BreakfastItem", request)
+            .ShouldReturnSuccessfulStatus()
+            .JsonResultShould<BreakfastItem>(r => r.Id.Should().Be(1),
+                                            r => r.Name.Should().Be(request.Name),
+                                            r => r.Rating.Should().Be(request.Rating));
+    await fixture.Runasync();
 }
 ```

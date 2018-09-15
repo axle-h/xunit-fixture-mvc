@@ -111,7 +111,7 @@ namespace Xunit.Fixture.Mvc
             _message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             return this;
         }
-        
+
         /// <summary>
         /// Configures the fixture perform the specified HTTP action.
         /// </summary>
@@ -172,7 +172,7 @@ namespace Xunit.Fixture.Mvc
         public IMvcFunctionalTestFixture PostRequestResolvedServiceShould<TService>(Func<TService, Task> assertion)
             where TService : class
         {
-            _postRequestAssertions.Add((typeof(TService), o => assertion((TService) o)));
+            _postRequestAssertions.Add((typeof(TService), o => assertion((TService)o)));
             return this;
         }
 
@@ -185,17 +185,16 @@ namespace Xunit.Fixture.Mvc
         public AutoFixture.Fixture AutoFixture { get; } = new AutoFixture.Fixture();
 
         /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// Runs this fixture.
         /// </summary>
-        public void Dispose() => RunAsync().Wait();
-
-        private async Task RunAsync()
+        /// <returns></returns>
+        public async Task RunAsync()
         {
             if (!_actStepConfigured)
             {
                 throw new InvalidOperationException($"Must call {nameof(When)} to configure an HTTP request");
             }
-            
+
             using (var loggerProvider = _output == null ? NullLoggerProvider.Instance as ILoggerProvider : new TestOutputHelperLoggerProvider(_output))
             using (var factory = new FixtureWebApplicationFactory(_output, loggerProvider, _environment, _extraServices, _configurationBuilderDelegates, _clientConfigurationDelegates))
             using (var client = factory.CreateClient()) // this actually builds the test server.
@@ -249,7 +248,7 @@ namespace Xunit.Fixture.Mvc
                     {
                         logger.LogInformation("No result assertions set, ignoring response body");
                     }
-                    
+
                     // Post request assertions.
                     using (var scope = factory.Server.Host.Services.CreateScope())
                     {
@@ -262,7 +261,7 @@ namespace Xunit.Fixture.Mvc
                     }
                 }
             }
-            
+
         }
 
         private class FixtureWebApplicationFactory : WebApplicationFactory<TStartup>

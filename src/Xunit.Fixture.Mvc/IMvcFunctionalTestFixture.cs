@@ -12,7 +12,7 @@ namespace Xunit.Fixture.Mvc
     /// A functional test fixture for MVC.
     /// </summary>
     /// <seealso cref="System.IDisposable" />
-    public interface IMvcFunctionalTestFixture : IDisposable
+    public interface IMvcFunctionalTestFixture
     {
         /// <summary>
         /// Gets the auto fixture.
@@ -96,5 +96,11 @@ namespace Xunit.Fixture.Mvc
         /// <returns></returns>
         IMvcFunctionalTestFixture PostRequestResolvedServiceShould<TService>(Func<TService, Task> assertion)
             where TService : class;
+
+        /// <summary>
+        /// Runs this fixture.
+        /// </summary>
+        /// <returns></returns>
+        Task RunAsync();
     }
 }
