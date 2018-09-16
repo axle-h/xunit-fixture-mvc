@@ -33,40 +33,43 @@ namespace Xunit.Fixture.Mvc
         private readonly IDictionary<Type, IList<Action<object>>> _resultAssertions = new Dictionary<Type, IList<Action<object>>>();
         private readonly IList<(Type serviceType, Func<object, Task> assertion)> _postRequestAssertions = new List<(Type serviceType, Func<object, Task> assertion)>();
         private readonly HttpRequestMessage _message = new HttpRequestMessage();
-
+        
         private bool _actStepConfigured;
+        private LogLevel _minimumLogLevel = LogLevel.Debug;
         private string _environment;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MvcFunctionalTestFixture{TStartup}"/> class.
         /// </summary>
-        /// <param name="testOutputHelper">The test output helper.</param>
-        public MvcFunctionalTestFixture(ITestOutputHelper testOutputHelper)
+        /// <param name="output">The test output helper.</param>
+        public MvcFunctionalTestFixture(ITestOutputHelper output)
         {
-            _output = testOutputHelper;
+            _output = output;
         }
+
+        /// <summary>
+        /// Gets the auto fixture.
+        /// </summary>
+        /// <value>
+        /// The auto fixture.
+        /// </value>
+        public AutoFixture.Fixture AutoFixture { get; } = new AutoFixture.Fixture();
 
         /// <summary>
         /// Configures the host test server to use the specified environment.
         /// </summary>
         /// <param name="environment">The environment.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingAspNetEnvironment(string environment)
-        {
-            _environment = environment;
-            return this;
-        }
+        public IMvcFunctionalTestFixture HavingAspNetEnvironment(string environment) =>
+            FluentSetup(() => _environment = environment);
 
         /// <summary>
         /// Configures the host test server configuration.
         /// </summary>
         /// <param name="action">The action.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingConfiguration(Action<ITestOutputHelper, IConfigurationBuilder> action)
-        {
-            _configurationBuilderDelegates.Add(action);
-            return this;
-        }
+        public IMvcFunctionalTestFixture HavingConfiguration(Action<ITestOutputHelper, IConfigurationBuilder> action) =>
+            FluentSetup(() => _configurationBuilderDelegates.Add(action));
 
         /// <summary>
         /// Configures an instance of the specified bootstrap service to be:
@@ -84,33 +87,24 @@ namespace Xunit.Fixture.Mvc
         /// </summary>
         /// <param name="servicesDelegate">The services delegate.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingServices(Action<IServiceCollection> servicesDelegate)
-        {
-            servicesDelegate(_extraServices);
-            return this;
-        }
+        public IMvcFunctionalTestFixture HavingServices(Action<IServiceCollection> servicesDelegate) =>
+            FluentSetup(() => servicesDelegate(_extraServices));
 
         /// <summary>
         /// Adds the specified configurator for the test server client.
         /// </summary>
         /// <param name="configurator">The configurator.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingClientConfiguration(Action<WebApplicationFactoryClientOptions> configurator)
-        {
-            _clientConfigurationDelegates.Add(configurator);
-            return this;
-        }
+        public IMvcFunctionalTestFixture HavingClientConfiguration(Action<WebApplicationFactoryClientOptions> configurator) =>
+            FluentSetup(() => _clientConfigurationDelegates.Add(configurator));
 
         /// <summary>
         /// Configures the request to use the specified string as a bearer token in the authorization header.
         /// </summary>
         /// <param name="token">The token.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingBearerToken(string token)
-        {
-            _message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            return this;
-        }
+        public IMvcFunctionalTestFixture HavingBearerToken(string token) =>
+            FluentSetup(() => _message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token));
 
         /// <summary>
         /// Configures the fixture perform the specified HTTP action.
@@ -170,19 +164,14 @@ namespace Xunit.Fixture.Mvc
         /// <param name="assertion">The assertion.</param>
         /// <returns></returns>
         public IMvcFunctionalTestFixture PostRequestResolvedServiceShould<TService>(Func<TService, Task> assertion)
-            where TService : class
-        {
-            _postRequestAssertions.Add((typeof(TService), o => assertion((TService)o)));
-            return this;
-        }
+            where TService : class => FluentSetup(() => _postRequestAssertions.Add((typeof(TService), o => assertion((TService)o))));
 
         /// <summary>
-        /// Gets the auto fixture.
+        /// Sets the log minimum level.
         /// </summary>
-        /// <value>
-        /// The auto fixture.
-        /// </value>
-        public AutoFixture.Fixture AutoFixture { get; } = new AutoFixture.Fixture();
+        /// <param name="logLevel">The log level.</param>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture SetMinimumLogLevel(LogLevel logLevel) => FluentSetup(() => _minimumLogLevel = logLevel);
 
         /// <summary>
         /// Runs this fixture.
@@ -196,7 +185,7 @@ namespace Xunit.Fixture.Mvc
             }
 
             using (var loggerProvider = _output == null ? NullLoggerProvider.Instance as ILoggerProvider : new TestOutputHelperLoggerProvider(_output))
-            using (var factory = new FixtureWebApplicationFactory(_output, loggerProvider, _environment, _extraServices, _configurationBuilderDelegates, _clientConfigurationDelegates))
+            using (var factory = new FixtureWebApplicationFactory(_output, loggerProvider, _environment, _extraServices, _configurationBuilderDelegates, _clientConfigurationDelegates, _minimumLogLevel))
             using (var client = factory.CreateClient()) // this actually builds the test server.
             {
                 var logger = loggerProvider.CreateLogger(GetType().ToString());
@@ -261,7 +250,12 @@ namespace Xunit.Fixture.Mvc
                     }
                 }
             }
+        }
 
+        private IMvcFunctionalTestFixture FluentSetup(Action action)
+        {
+            action();
+            return this;
         }
 
         private class FixtureWebApplicationFactory : WebApplicationFactory<TStartup>
@@ -271,19 +265,22 @@ namespace Xunit.Fixture.Mvc
             private readonly string _environment;
             private readonly IServiceCollection _extraServices;
             private readonly IEnumerable<Action<ITestOutputHelper, IConfigurationBuilder>> _configurationBuilderDelegates;
+            private readonly LogLevel _minimumLogLevel;
 
             public FixtureWebApplicationFactory(ITestOutputHelper output,
-                                                               ILoggerProvider loggerProvider,
-                                                               string environment,
-                                                               IServiceCollection extraServices,
-                                                               IEnumerable<Action<ITestOutputHelper, IConfigurationBuilder>> configurationBuilderDelegates,
-                                                               IEnumerable<Action<WebApplicationFactoryClientOptions>> clientConfigurationDelegates)
+                                                ILoggerProvider loggerProvider,
+                                                string environment,
+                                                IServiceCollection extraServices,
+                                                IEnumerable<Action<ITestOutputHelper, IConfigurationBuilder>> configurationBuilderDelegates,
+                                                IEnumerable<Action<WebApplicationFactoryClientOptions>> clientConfigurationDelegates,
+                                                LogLevel minimumLogLevel)
             {
                 _output = output;
                 _loggerProvider = loggerProvider;
                 _environment = environment;
                 _extraServices = extraServices;
                 _configurationBuilderDelegates = configurationBuilderDelegates;
+                _minimumLogLevel = minimumLogLevel;
 
 
                 foreach (var configurator in clientConfigurationDelegates)
@@ -302,7 +299,7 @@ namespace Xunit.Fixture.Mvc
                                                       }
                                                   })
                        .UseEnvironment(_environment ?? EnvironmentName.Production)
-                       .ConfigureLogging(b => b.AddProvider(_loggerProvider))
+                       .ConfigureLogging(b => b.SetMinimumLevel(_minimumLogLevel).AddProvider(_loggerProvider))
                        .ConfigureServices(services =>
                                           {
                                               foreach (var service in _extraServices)
