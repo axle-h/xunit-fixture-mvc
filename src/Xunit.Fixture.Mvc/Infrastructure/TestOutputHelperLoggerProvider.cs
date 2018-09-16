@@ -53,7 +53,7 @@ namespace Xunit.Fixture.Mvc.Infrastructure
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
             {
-                var message = $"{_stopwatch.Elapsed} [{logLevel}] [{_categoryName}] {formatter(state, exception)}";
+                var message = $"{_stopwatch.Elapsed} [{logLevel}] [{_categoryName}] {formatter(state, exception)} {exception}";
                 _helper.WriteLine(message);
             }
 

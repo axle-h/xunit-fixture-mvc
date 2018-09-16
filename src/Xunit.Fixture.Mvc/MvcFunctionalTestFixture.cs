@@ -171,7 +171,7 @@ namespace Xunit.Fixture.Mvc
         /// </summary>
         /// <param name="logLevel">The log level.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture SetMinimumLogLevel(LogLevel logLevel) => FluentSetup(() => _minimumLogLevel = logLevel);
+        public IMvcFunctionalTestFixture HavingMinimumLogLevel(LogLevel logLevel) => FluentSetup(() => _minimumLogLevel = logLevel);
 
         /// <summary>
         /// Runs this fixture.

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit.Abstractions;
 
 namespace Xunit.Fixture.Mvc
@@ -102,5 +103,12 @@ namespace Xunit.Fixture.Mvc
         /// </summary>
         /// <returns></returns>
         Task RunAsync();
+
+        /// <summary>
+        /// Sets the log minimum level.
+        /// </summary>
+        /// <param name="logLevel">The log level.</param>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture HavingMinimumLogLevel(LogLevel logLevel);
     }
 }

@@ -2,6 +2,8 @@
 using System.Net.Http;
 using System.Text;
 using AutoFixture;
+using AutoFixture.Dsl;
+using AutoFixture.Kernel;
 using Newtonsoft.Json;
 
 namespace Xunit.Fixture.Mvc.Extensions
@@ -62,10 +64,15 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="entity">The entity.</param>
         /// <param name="id">The identifier.</param>
         /// <param name="model">The model.</param>
+        /// <param name="composer">The composer.</param>
         /// <returns></returns>
-        public static TFixture WhenUpdating<TFixture, TId, TModel>(this TFixture fixture, string entity, TId id, out TModel model)
+        public static TFixture WhenUpdating<TFixture, TId, TModel>(this TFixture fixture,
+                                                                   string entity,
+                                                                   TId id,
+                                                                   out TModel model,
+                                                                   Func<ICustomizationComposer<TModel>, ISpecimenBuilder> composer = null)
             where TFixture : IMvcFunctionalTestFixture =>
-            fixture.WhenCallingRestMethod(HttpMethod.Put, $"{entity}/{Uri.EscapeDataString(id.ToString())}", out model);
+            fixture.WhenCallingRestMethod(HttpMethod.Put, $"{entity}/{Uri.EscapeDataString(id.ToString())}", out model, composer);
 
         /// <summary>
         /// Configures the specified fixture's act step to be a POST request for the specified entity with the specified JSON body.
@@ -89,10 +96,14 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="fixture">The fixture.</param>
         /// <param name="entity">The entity.</param>
         /// <param name="model">The model.</param>
+        /// <param name="composer">The composer.</param>
         /// <returns></returns>
-        public static TFixture WhenCreating<TFixture, TModel>(this TFixture fixture, string entity, out TModel model)
+        public static TFixture WhenCreating<TFixture, TModel>(this TFixture fixture,
+                                                              string entity,
+                                                              out TModel model,
+                                                              Func<ICustomizationComposer<TModel>, ISpecimenBuilder> composer = null)
             where TFixture : IMvcFunctionalTestFixture =>
-            fixture.WhenCallingRestMethod(HttpMethod.Post, entity, out model);
+            fixture.WhenCallingRestMethod(HttpMethod.Post, entity, out model, composer);
 
         /// <summary>
         /// Configures the specified fixture's act step to be a PATCH request for the specified entity and id with the specified JSON body.
@@ -119,10 +130,15 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="entity">The entity.</param>
         /// <param name="id">The identifier.</param>
         /// <param name="model">The model.</param>
+        /// <param name="composer">The composer.</param>
         /// <returns></returns>
-        public static TFixture WhenPatching<TFixture, TId, TModel>(this TFixture fixture, string entity, TId id, out TModel model)
+        public static TFixture WhenPatching<TFixture, TId, TModel>(this TFixture fixture,
+                                                                   string entity,
+                                                                   TId id,
+                                                                   out TModel model,
+                                                                   Func<ICustomizationComposer<TModel>, ISpecimenBuilder> composer = null)
             where TFixture : IMvcFunctionalTestFixture =>
-            fixture.WhenCallingRestMethod(Patch, $"{entity}/{Uri.EscapeDataString(id.ToString())}", out model);
+            fixture.WhenCallingRestMethod(Patch, $"{entity}/{Uri.EscapeDataString(id.ToString())}", out model, composer);
 
         /// <summary>
         /// Configures the specified fixture's act step to be a DELETE request for the specified entity and id.
@@ -163,11 +179,20 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="method">The method.</param>
         /// <param name="url">The URL.</param>
         /// <param name="model">The model.</param>
+        /// <param name="composer">The composer.</param>
         /// <returns></returns>
-        public static TFixture WhenCallingRestMethod<TFixture, TModel>(this TFixture fixture, HttpMethod method, string url, out TModel model)
+        public static TFixture WhenCallingRestMethod<TFixture, TModel>(this TFixture fixture, HttpMethod method,
+                                                                       string url,
+                                                                       out TModel model,
+                                                                       Func<ICustomizationComposer<TModel>, ISpecimenBuilder> composer = null)
             where TFixture : IMvcFunctionalTestFixture
         {
-            model = fixture.AutoFixture.Create<TModel>();
+            var modelBuilder = fixture.AutoFixture.Build<TModel>();
+            if (composer == null)
+            {
+                composer = x => x;
+            }
+            model = composer(modelBuilder).Create<TModel>();
             return fixture.WhenCallingRestMethod(method, url, model);
         }
     }
