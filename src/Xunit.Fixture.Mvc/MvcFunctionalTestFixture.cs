@@ -45,6 +45,7 @@ namespace Xunit.Fixture.Mvc
         public MvcFunctionalTestFixture(ITestOutputHelper output)
         {
             _output = output;
+            HavingServices(services => services.AddSingleton(new MvcFunctionalTestFixtureHttpRequestMessage(_message)));
         }
 
         /// <summary>
@@ -99,12 +100,15 @@ namespace Xunit.Fixture.Mvc
             FluentSetup(() => _clientConfigurationDelegates.Add(configurator));
 
         /// <summary>
-        /// Configures the request to use the specified string as a bearer token in the authorization header.
+        /// Configures the HTTP request message.
         /// </summary>
-        /// <param name="token">The token.</param>
+        /// <param name="configurator">The configurator.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingBearerToken(string token) =>
-            FluentSetup(() => _message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token));
+        public IMvcFunctionalTestFixture HavingConfiguredHttpMessage(Action<HttpRequestMessage> configurator)
+        {
+            configurator(_message);
+            return this;
+        }
 
         /// <summary>
         /// Configures the fixture perform the specified HTTP action.
@@ -115,11 +119,12 @@ namespace Xunit.Fixture.Mvc
         public IMvcFunctionalTestFixture When(HttpMethod method, string uri, HttpContent content)
         {
             _actStepConfigured = true;
-
-            _message.Method = method;
-            _message.RequestUri = new Uri(uri, UriKind.Relative);
-            _message.Content = content;
-            return this;
+            return HavingConfiguredHttpMessage(message =>
+                                               {
+                                                   message.Method = method;
+                                                   message.RequestUri = new Uri(uri, UriKind.Relative);
+                                                   message.Content = content;
+                                               });
         }
 
         /// <summary>
@@ -281,7 +286,6 @@ namespace Xunit.Fixture.Mvc
                 _extraServices = extraServices;
                 _configurationBuilderDelegates = configurationBuilderDelegates;
                 _minimumLogLevel = minimumLogLevel;
-
 
                 foreach (var configurator in clientConfigurationDelegates)
                 {

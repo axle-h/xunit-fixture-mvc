@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http.Headers;
 using AutoFixture;
 
 namespace Xunit.Fixture.Mvc.Extensions
@@ -37,5 +38,14 @@ namespace Xunit.Fixture.Mvc.Extensions
                                                                    {
                                                                        Path = path.TrimStart('/').TrimEnd('/') + '/'
                                                                    }.Uri);
+
+        /// <summary>
+        /// Configures the request to use the specified string as a bearer token in the authorization header.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="token">The token.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingBearerToken(this IMvcFunctionalTestFixture fixture, string token) =>
+            fixture.HavingConfiguredHttpMessage(message => message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token));
     }
 }

@@ -60,14 +60,7 @@ namespace Xunit.Fixture.Mvc
         /// <param name="configurator">The configurator.</param>
         /// <returns></returns>
         IMvcFunctionalTestFixture HavingClientConfiguration(Action<WebApplicationFactoryClientOptions> configurator);
-
-        /// <summary>
-        /// Configures the request to use the specified string as a bearer token in the authorization header.
-        /// </summary>
-        /// <param name="token">The token.</param>
-        /// <returns></returns>
-        IMvcFunctionalTestFixture HavingBearerToken(string token);
-
+        
         /// <summary>
         /// Configures the fixture perform the specified HTTP action.
         /// </summary>
@@ -99,16 +92,23 @@ namespace Xunit.Fixture.Mvc
             where TService : class;
 
         /// <summary>
-        /// Runs this fixture.
-        /// </summary>
-        /// <returns></returns>
-        Task RunAsync();
-
-        /// <summary>
         /// Sets the log minimum level.
         /// </summary>
         /// <param name="logLevel">The log level.</param>
         /// <returns></returns>
         IMvcFunctionalTestFixture HavingMinimumLogLevel(LogLevel logLevel);
+
+        /// <summary>
+        /// Configures the HTTP request message.
+        /// </summary>
+        /// <param name="configurator">The configurator.</param>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture HavingConfiguredHttpMessage(Action<HttpRequestMessage> configurator);
+
+        /// <summary>
+        /// Runs this fixture.
+        /// </summary>
+        /// <returns></returns>
+        Task RunAsync();
     }
 }
