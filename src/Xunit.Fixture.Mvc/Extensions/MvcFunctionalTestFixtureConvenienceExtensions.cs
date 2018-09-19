@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using AutoFixture;
+using AutoFixture.Dsl;
+using AutoFixture.Kernel;
 
 namespace Xunit.Fixture.Mvc.Extensions
 {
@@ -47,5 +49,19 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <returns></returns>
         public static IMvcFunctionalTestFixture HavingBearerToken(this IMvcFunctionalTestFixture fixture, string token) =>
             fixture.HavingConfiguredHttpMessage(message => message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token));
+
+        /// <summary>
+        /// Adds the specified composer transformation function as an AutoFixture customization.
+        /// </summary>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="composer">The composer.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingAutoFixtureCustomization<TModel>(this IMvcFunctionalTestFixture fixture,
+                                                                                       Func<ICustomizationComposer<TModel>, ISpecimenBuilder> composer)
+        {
+            fixture.AutoFixture.Customize(composer);
+            return fixture;
+        }
     }
 }
