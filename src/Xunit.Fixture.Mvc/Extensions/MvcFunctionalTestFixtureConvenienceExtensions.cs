@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
+using System.Threading.Tasks;
 using AutoFixture;
 using AutoFixture.Dsl;
 using AutoFixture.Kernel;
@@ -63,5 +64,20 @@ namespace Xunit.Fixture.Mvc.Extensions
             fixture.AutoFixture.Customize(composer);
             return fixture;
         }
+
+        /// <summary>
+        /// Configures the specified bootstrap function to be:
+        /// 1. Added to the test server DI container.
+        /// 2. Resolved and run once the test server is constructed.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="bootstrapAction">The action to perform on the service provider during bootstrap.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingBootstrap(this IMvcFunctionalTestFixture fixture, Action<IServiceProvider> bootstrapAction) =>
+            fixture.HavingBootstrap(p =>
+                                    {
+                                        bootstrapAction(p);
+                                        return Task.CompletedTask;
+                                    });
     }
 }

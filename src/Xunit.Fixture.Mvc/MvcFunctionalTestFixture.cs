@@ -84,6 +84,16 @@ namespace Xunit.Fixture.Mvc
             HavingServices(services => services.AddScoped<ITestServerBootstrap, TTestDataBootstrapService>());
 
         /// <summary>
+        /// Configures the specified bootstrap function to be:
+        /// 1. Added to the test server DI container.
+        /// 2. Resolved and run once the test server is constructed.
+        /// </summary>
+        /// <param name="bootstrapAction">The action to perform on the service provider during bootstrap.</param>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture HavingBootstrap(Func<IServiceProvider, Task> bootstrapAction) =>
+            HavingServices(services => services.AddScoped<ITestServerBootstrap>(provider => new SimpleTestServerBootstrap(provider, bootstrapAction)));
+
+        /// <summary>
         /// Configures test server DI container services.
         /// </summary>
         /// <param name="servicesDelegate">The services delegate.</param>
