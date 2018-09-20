@@ -31,6 +31,48 @@ namespace Xunit.Fixture.Mvc.Extensions
         public static ICollection<TModel> CreateMany<TModel>(this IMvcFunctionalTestFixture fixture) => fixture.AutoFixture.CreateMany<TModel>().ToList();
 
         /// <summary>
+        /// Creates an auto fixture constructed instance of the specified model.
+        /// </summary>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="model">The model.</param>
+        /// <param name="configurator">The configurator.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingModel<TModel>(this IMvcFunctionalTestFixture fixture,
+                                                                    out TModel model,
+                                                                    Action<TModel> configurator = null)
+        {
+            model = fixture.Create<TModel>();
+            configurator?.Invoke(model);
+            return fixture;
+        }
+
+        /// <summary>
+        /// Creates a collection of auto fixture constructed instances of the specified model.
+        /// </summary>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="models">The models.</param>
+        /// <param name="configurator">The configurator.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingModels<TModel>(this IMvcFunctionalTestFixture fixture,
+                                                                     out ICollection<TModel> models,
+                                                                     Action<TModel> configurator = null)
+        {
+            models = fixture.CreateMany<TModel>();
+
+            if (configurator != null)
+            {
+                foreach (var model in models)
+                {
+                    configurator(model);
+                }
+            }
+
+            return fixture;
+        }
+
+        /// <summary>
         /// Configures the HTTP client to have the specified path base.
         /// </summary>
         /// <param name="fixture">The fixture.</param>
