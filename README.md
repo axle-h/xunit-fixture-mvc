@@ -16,16 +16,14 @@ public class BreakfastItemTests {
     }
 
     [Fact]
-    public async Task When_creating_breakfast_item()
-    {
-        await new MvcFunctionalTestFixture<Startup>(_output)
-                .WhenCreating("BreakfastItem", out CreateOrUpdateBreakfastItemRequest request)
-                .ShouldReturnSuccessfulStatus()
-                .JsonResultShould<BreakfastItem>(r => r.Id.Should().Be(1),
-                                                 r => r.Name.Should().Be(request.Name),
-                                                 r => r.Rating.Should().Be(request.Rating))
-                .RunAsync();
-    }
+    public Task When_creating_breakfast_item() =>
+        new MvcFunctionalTestFixture<Startup>(_output)
+            .WhenCreating("BreakfastItem", out CreateOrUpdateBreakfastItemRequest request)
+            .ShouldReturnSuccessfulStatus()
+            .JsonResultShould<BreakfastItem>(r => r.Id.Should().Be(1),
+                                                r => r.Name.Should().Be(request.Name),
+                                                r => r.Rating.Should().Be(request.Rating))
+            .RunAsync();
 }
 ```
 
