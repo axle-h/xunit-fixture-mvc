@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
+using AutoFixture;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +23,12 @@ namespace Xunit.Fixture.Mvc
         /// <value>
         /// The auto fixture.
         /// </value>
-        AutoFixture.Fixture AutoFixture { get; }
+        IFixture AutoFixture { get; }
+
+        /// <summary>
+        /// Gets the properties.
+        /// </summary>
+        IDictionary<string, string> Properties { get; }
 
         /// <summary>
         /// Configures the host test server to use the specified environment.
@@ -69,7 +76,7 @@ namespace Xunit.Fixture.Mvc
         /// <param name="configurator">The configurator.</param>
         /// <returns></returns>
         IMvcFunctionalTestFixture HavingClientConfiguration(Action<WebApplicationFactoryClientOptions> configurator);
-        
+
         /// <summary>
         /// Configures the fixture perform the specified HTTP action.
         /// </summary>

@@ -54,7 +54,18 @@ namespace Xunit.Fixture.Mvc.Infrastructure
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
             {
                 var message = $"{_stopwatch.Elapsed} [{logLevel}] [{_categoryName}] {formatter(state, exception)} {exception}";
-                _helper.WriteLine(message);
+
+                try
+                {
+                    _helper.WriteLine(message);
+                }
+                catch (Exception)
+                {
+                    // When called from a background thread, the xunit test output will fail.
+                    // So let's fall back to just writing to the console and debug streams.
+                    Console.WriteLine(message);
+                    Debug.WriteLine(message);
+                }
             }
 
             public bool IsEnabled(LogLevel logLevel) => true;

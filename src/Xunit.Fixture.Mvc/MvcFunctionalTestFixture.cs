@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using AutoFixture;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -33,7 +34,7 @@ namespace Xunit.Fixture.Mvc
         private readonly IDictionary<Type, IList<Action<object>>> _resultAssertions = new Dictionary<Type, IList<Action<object>>>();
         private readonly IList<(Type serviceType, Func<object, Task> assertion)> _postRequestAssertions = new List<(Type serviceType, Func<object, Task> assertion)>();
         private readonly HttpRequestMessage _message = new HttpRequestMessage();
-        
+
         private bool _actStepConfigured;
         private LogLevel _minimumLogLevel = LogLevel.Debug;
         private string _environment;
@@ -54,7 +55,12 @@ namespace Xunit.Fixture.Mvc
         /// <value>
         /// The auto fixture.
         /// </value>
-        public AutoFixture.Fixture AutoFixture { get; } = new AutoFixture.Fixture();
+        public IFixture AutoFixture { get; } = new AutoFixture.Fixture();
+
+        /// <summary>
+        /// Gets the properties.
+        /// </summary>
+        public IDictionary<string, string> Properties { get; } = new Dictionary<string, string>();
 
         /// <summary>
         /// Configures the host test server to use the specified environment.
@@ -227,40 +233,36 @@ namespace Xunit.Fixture.Mvc
                     }
 
                     // Response body (result) assertions.
-                    if (_resultAssertions.Any())
-                    {
-                        var responseBody = await response.Content.ReadAsStringAsync();
-                        logger.LogInformation("Received: " + responseBody);
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    logger.LogInformation("Received: " + responseBody);
 
-                        foreach (var kvp in _resultAssertions)
+                    foreach (var kvp in _resultAssertions)
+                    {
+                        try
                         {
-                            try
+                            var result = JsonConvert.DeserializeObject(responseBody, kvp.Key);
+                            foreach (var assertion in kvp.Value)
                             {
-                                var result = JsonConvert.DeserializeObject(responseBody, kvp.Key);
-                                foreach (var assertion in kvp.Value)
-                                {
-                                    aggregator.Try(() => assertion(result));
-                                }
-                            }
-                            catch (JsonException e)
-                            {
-                                aggregator.Add(e);
+                                aggregator.Try(() => assertion(result));
                             }
                         }
-                    }
-                    else
-                    {
-                        logger.LogInformation("No result assertions set, ignoring response body");
+                        catch (JsonException e)
+                        {
+                            aggregator.Add(e);
+                        }
                     }
 
                     // Post request assertions.
-                    using (var scope = factory.Server.Host.Services.CreateScope())
+                    if (_postRequestAssertions.Any())
                     {
-                        foreach (var (serviceType, assertion) in _postRequestAssertions)
+                        using (var scope = factory.Server.Host.Services.CreateScope())
                         {
-                            logger.LogInformation($"Running post request assertion on service: {serviceType}");
-                            var service = scope.ServiceProvider.GetRequiredService(serviceType);
-                            await aggregator.TryAsync(() => assertion(service));
+                            foreach (var (serviceType, assertion) in _postRequestAssertions)
+                            {
+                                logger.LogInformation($"Running post request assertion on service: {serviceType}");
+                                var service = scope.ServiceProvider.GetRequiredService(serviceType);
+                                await aggregator.TryAsync(() => assertion(service));
+                            }
                         }
                     }
                 }

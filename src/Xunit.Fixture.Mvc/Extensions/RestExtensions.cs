@@ -20,7 +20,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <returns></returns>
         public static IMvcFunctionalTestFixture WhenGetting(this IMvcFunctionalTestFixture fixture, string url) =>
             fixture.WhenCallingRestMethod(HttpMethod.Get, url);
-        
+
         /// <summary>
         /// Configures the specified fixture's act step to be a GET request for the specified entity and id.
         /// </summary>
@@ -58,7 +58,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         public static IMvcFunctionalTestFixture WhenUpdating<TId, TModel>(this IMvcFunctionalTestFixture fixture,
                                                                           string entity,
                                                                           TId id,
-                                                                          out TModel model) => 
+                                                                          out TModel model) =>
             fixture.WhenCallingRestMethod(HttpMethod.Put, $"{entity}/{Uri.EscapeDataString(id.ToString())}", out model);
 
         /// <summary>
