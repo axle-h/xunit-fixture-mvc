@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using AutoFixture;
+using Bogus;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -56,6 +56,11 @@ namespace Xunit.Fixture.Mvc
         /// The auto fixture.
         /// </value>
         public IFixture AutoFixture { get; } = new AutoFixture.Fixture();
+
+        // <summary>
+        /// Gets the faker.
+        /// </summary>
+        public Faker Faker { get; } = new Faker();
 
         /// <summary>
         /// Gets the properties.

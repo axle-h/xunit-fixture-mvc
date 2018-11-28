@@ -76,13 +76,16 @@ namespace Xunit.Fixture.Mvc.Extensions
             fixture.WhenHavingProperty(key, x => x == value, action);
 
         /// <summary>
-        /// Picks a random model from the specified collection.
+        /// Performs an arrange action.
         /// </summary>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="models">The models.</param>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="action">The action.</param>
         /// <returns></returns>
-        public static TModel PickRandom<TModel>(this ICollection<TModel> models) =>
-            Faker.Random.CollectionItem(models);
+        public static IMvcFunctionalTestFixture Having(this IMvcFunctionalTestFixture fixture, Action action)
+        {
+            action();
+            return fixture;
+        }
 
         /// <summary>
         /// Picks a random model from the specified collection and optionally mutates it.
@@ -93,31 +96,16 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="model">The model.</param>
         /// <param name="mutationFunc">The mutation function.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture HavingRandom<TModel>(this IMvcFunctionalTestFixture fixture, ICollection<TModel> models,
+        public static IMvcFunctionalTestFixture HavingRandom<TModel>(this IMvcFunctionalTestFixture fixture,
+                                                                     ICollection<TModel> models,
                                                                      out TModel model,
                                                                      Action<TModel> mutationFunc = null)
         {
-            model = models.PickRandom();
+            model = fixture.Faker.Random.CollectionItem(models);
             mutationFunc?.Invoke(model);
             return fixture;
         }
-
-        /// <summary>
-        /// Creates an auto fixture constructed instance of the specified model.
-        /// </summary>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <returns></returns>
-        public static TModel Create<TModel>(this IMvcFunctionalTestFixture fixture) => fixture.AutoFixture.Create<TModel>();
-
-        /// <summary>
-        /// Creates a collection of auto fixture constructed instances of the specified model.
-        /// </summary>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <returns></returns>
-        public static ICollection<TModel> CreateMany<TModel>(this IMvcFunctionalTestFixture fixture) => fixture.AutoFixture.CreateMany<TModel>().ToList();
-
+        
         /// <summary>
         /// Creates an auto fixture constructed instance of the specified model.
         /// </summary>
@@ -130,7 +118,7 @@ namespace Xunit.Fixture.Mvc.Extensions
                                                                     out TModel model,
                                                                     Action<TModel> configurator = null)
         {
-            model = fixture.Create<TModel>();
+            model = fixture.AutoFixture.Create<TModel>();
             configurator?.Invoke(model);
             return fixture;
         }
@@ -147,7 +135,7 @@ namespace Xunit.Fixture.Mvc.Extensions
                                                                      out ICollection<TModel> models,
                                                                      Action<TModel> configurator = null)
         {
-            models = fixture.CreateMany<TModel>();
+            models = fixture.AutoFixture.CreateMany<TModel>().ToList();
 
             if (configurator != null)
             {
@@ -157,6 +145,22 @@ namespace Xunit.Fixture.Mvc.Extensions
                 }
             }
 
+            return fixture;
+        }
+
+        /// <summary>
+        /// Uses the faker on the fixture as a factory for some fake data.
+        /// </summary>
+        /// <typeparam name="TFake">The type of the fake.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="factory">The factory.</param>
+        /// <param name="fake">The fake.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingFake<TFake>(this IMvcFunctionalTestFixture fixture,
+                                                                  Func<Faker, TFake> factory,
+                                                                  out TFake fake)
+        {
+            fake = factory(fixture.Faker);
             return fixture;
         }
 

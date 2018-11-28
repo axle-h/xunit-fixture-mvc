@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
 using AutoFixture;
+using Bogus;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,10 +21,12 @@ namespace Xunit.Fixture.Mvc
         /// <summary>
         /// Gets the auto fixture.
         /// </summary>
-        /// <value>
-        /// The auto fixture.
-        /// </value>
         IFixture AutoFixture { get; }
+
+        /// <summary>
+        /// Gets the faker.
+        /// </summary>
+        Faker Faker { get; }
 
         /// <summary>
         /// Gets the properties.
