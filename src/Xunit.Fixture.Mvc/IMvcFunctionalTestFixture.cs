@@ -21,6 +21,9 @@ namespace Xunit.Fixture.Mvc
         /// <summary>
         /// Gets the auto fixture.
         /// </summary>
+        /// <value>
+        /// The auto fixture.
+        /// </value>
         IFixture AutoFixture { get; }
 
         /// <summary>
@@ -81,6 +84,13 @@ namespace Xunit.Fixture.Mvc
         IMvcFunctionalTestFixture HavingClientConfiguration(Action<WebApplicationFactoryClientOptions> configurator);
 
         /// <summary>
+        /// Configures the HTTP request message.
+        /// </summary>
+        /// <param name="configurator">The configurator.</param>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture HavingConfiguredHttpMessage(Action<HttpRequestMessage> configurator);
+
+        /// <summary>
         /// Configures the fixture perform the specified HTTP action.
         /// </summary>
         /// <param name="method">The HTTP method.</param>
@@ -95,11 +105,14 @@ namespace Xunit.Fixture.Mvc
         IMvcFunctionalTestFixture ResponseShould(params Action<HttpResponseMessage>[] assertions);
 
         /// <summary>
-        /// Adds assertions that will be run on the HTTP, JSON response body.
+        /// Adds an assertion that the response body should be successfully deserialized using the specified deserializer
+        /// and then satisfy the specified assertion actions.
         /// </summary>
         /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="deserializer">The deserializer.</param>
         /// <param name="assertions">The assertions.</param>
-        IMvcFunctionalTestFixture ShouldReturnJson<TResult>(params Action<TResult>[] assertions);
+        /// <returns></returns>
+        IMvcFunctionalTestFixture ShouldReturn<TResult>(Func<string, TResult> deserializer, params Action<TResult>[] assertions);
 
         /// <summary>
         /// Adds an assertion that will be run after the request has completed, resolving a service from DI.
@@ -116,13 +129,6 @@ namespace Xunit.Fixture.Mvc
         /// <param name="logLevel">The log level.</param>
         /// <returns></returns>
         IMvcFunctionalTestFixture HavingMinimumLogLevel(LogLevel logLevel);
-
-        /// <summary>
-        /// Configures the HTTP request message.
-        /// </summary>
-        /// <param name="configurator">The configurator.</param>
-        /// <returns></returns>
-        IMvcFunctionalTestFixture HavingConfiguredHttpMessage(Action<HttpRequestMessage> configurator);
 
         /// <summary>
         /// Runs this fixture.

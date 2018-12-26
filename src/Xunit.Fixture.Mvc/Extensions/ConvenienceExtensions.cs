@@ -28,6 +28,20 @@ namespace Xunit.Fixture.Mvc.Extensions
         }
 
         /// <summary>
+        /// Performs an arrange function, returning the result as an output parameter.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="result">The result.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture Having<TResult>(this IMvcFunctionalTestFixture fixture, Func<TResult> action, out TResult result)
+        {
+            result = action();
+            return fixture;
+        }
+
+        /// <summary>
         /// Picks a random model from the specified collection and optionally mutates it.
         /// </summary>
         /// <typeparam name="TModel">The type of the model.</typeparam>

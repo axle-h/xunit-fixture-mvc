@@ -27,12 +27,20 @@ namespace Xunit.Fixture.Mvc
         where TStartup : class
     {
         private readonly ITestOutputHelper _output;
+
         private readonly IServiceCollection _extraServices = new ServiceCollection();
+
         private readonly IList<Action<ITestOutputHelper, IConfigurationBuilder>> _configurationBuilderDelegates = new List<Action<ITestOutputHelper, IConfigurationBuilder>>();
+
         private readonly IList<Action<WebApplicationFactoryClientOptions>> _clientConfigurationDelegates = new List<Action<WebApplicationFactoryClientOptions>>();
+
         private readonly IList<Action<HttpResponseMessage>> _responseAssertions = new List<Action<HttpResponseMessage>>();
-        private readonly IDictionary<Type, IList<Action<object>>> _resultAssertions = new Dictionary<Type, IList<Action<object>>>();
+
+        private readonly IList<(Func<string, object> deserializer, IList<Action<object>> assertions)> _resultAssertions =
+            new List<(Func<string, object> deserializer, IList<Action<object>> assertions)>();
+
         private readonly IList<(Type serviceType, Func<object, Task> assertion)> _postRequestAssertions = new List<(Type serviceType, Func<object, Task> assertion)>();
+
         private readonly HttpRequestMessage _message = new HttpRequestMessage();
 
         private bool _actStepConfigured;
@@ -141,11 +149,11 @@ namespace Xunit.Fixture.Mvc
         {
             _actStepConfigured = true;
             return HavingConfiguredHttpMessage(message =>
-                                               {
-                                                   message.Method = method;
-                                                   message.RequestUri = new Uri(uri, UriKind.Relative);
-                                                   message.Content = content;
-                                               });
+            {
+                message.Method = method;
+                message.RequestUri = new Uri(uri, UriKind.Relative);
+                message.Content = content;
+            });
         }
 
         /// <summary>
@@ -163,23 +171,18 @@ namespace Xunit.Fixture.Mvc
         }
 
         /// <summary>
-        /// Adds assertions that will be run on the HTTP, JSON response body.
+        /// Adds an assertion that the response body should be successfully deserialized using the specified deserializer
+        /// and then satisfy the specified assertion actions.
         /// </summary>
         /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="deserializer">The deserializer.</param>
         /// <param name="assertions">The assertions.</param>
-        /// <exception cref="ArgumentException">TResult</exception>
-        public IMvcFunctionalTestFixture ShouldReturnJson<TResult>(params Action<TResult>[] assertions)
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture ShouldReturn<TResult>(Func<string, TResult> deserializer, params Action<TResult>[] assertions)
         {
-            if (!_resultAssertions.TryGetValue(typeof(TResult), out var list))
-            {
-                list = _resultAssertions[typeof(TResult)] = new List<Action<object>>();
-            }
-
-            foreach (var assertion in assertions)
-            {
-                list.Add(o => assertion(o.Should().BeAssignableTo<TResult>().Which));
-            }
-
+            var objectAssertions = assertions.Select<Action<TResult>, Action<object>>(a => o => a(o.Should().BeAssignableTo<TResult>().Which))
+                                             .ToList();
+            _resultAssertions.Add((s => deserializer(s), objectAssertions));
             return this;
         }
 
@@ -241,17 +244,17 @@ namespace Xunit.Fixture.Mvc
                     var responseBody = await response.Content.ReadAsStringAsync();
                     logger.LogInformation("Received: " + responseBody);
 
-                    foreach (var kvp in _resultAssertions)
+                    foreach (var (deserializer, assertions) in _resultAssertions)
                     {
                         try
                         {
-                            var result = JsonConvert.DeserializeObject(responseBody, kvp.Key);
-                            foreach (var assertion in kvp.Value)
+                            var result = deserializer(responseBody);
+                            foreach (var assertion in assertions)
                             {
                                 aggregator.Try(() => assertion(result));
                             }
                         }
-                        catch (JsonException e)
+                        catch (Exception e)
                         {
                             aggregator.Add(e);
                         }
@@ -313,21 +316,21 @@ namespace Xunit.Fixture.Mvc
             protected override void ConfigureWebHost(IWebHostBuilder builder)
             {
                 builder.ConfigureAppConfiguration(configurationBuilder =>
-                                                  {
-                                                      foreach (var action in _configurationBuilderDelegates)
-                                                      {
-                                                          action(_output, configurationBuilder);
-                                                      }
-                                                  })
+                {
+                    foreach (var action in _configurationBuilderDelegates)
+                    {
+                        action(_output, configurationBuilder);
+                    }
+                })
                        .UseEnvironment(_environment ?? EnvironmentName.Production)
                        .ConfigureLogging(b => b.SetMinimumLevel(_minimumLogLevel).AddProvider(_loggerProvider))
                        .ConfigureServices(services =>
-                                          {
-                                              foreach (var service in _extraServices)
-                                              {
-                                                  services.Add(service);
-                                              }
-                                          });
+                       {
+                           foreach (var service in _extraServices)
+                           {
+                               services.Add(service);
+                           }
+                       });
             }
         }
     }
