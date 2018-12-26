@@ -57,7 +57,7 @@ namespace Xunit.Fixture.Mvc
         /// </value>
         public IFixture AutoFixture { get; } = new AutoFixture.Fixture();
 
-        // <summary>
+        /// <summary>
         /// Gets the faker.
         /// </summary>
         public Faker Faker { get; } = new Faker();
@@ -65,7 +65,7 @@ namespace Xunit.Fixture.Mvc
         /// <summary>
         /// Gets the properties.
         /// </summary>
-        public IDictionary<string, string> Properties { get; } = new Dictionary<string, string>();
+        public IDictionary<string, object> Properties { get; } = new Dictionary<string, object>();
 
         /// <summary>
         /// Configures the host test server to use the specified environment.

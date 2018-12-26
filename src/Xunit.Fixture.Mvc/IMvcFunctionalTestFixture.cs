@@ -31,7 +31,7 @@ namespace Xunit.Fixture.Mvc
         /// <summary>
         /// Gets the properties.
         /// </summary>
-        IDictionary<string, string> Properties { get; }
+        IDictionary<string, object> Properties { get; }
 
         /// <summary>
         /// Configures the host test server to use the specified environment.
