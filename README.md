@@ -11,7 +11,8 @@ MVC functional tests with a fixture pattern.
 public class BreakfastItemTests {
     private readonly ITestOutputHelper _output;
 
-    public BreakfastItemTests(ITestOutputHelper output) {
+    public BreakfastItemTests(ITestOutputHelper output)
+    {
         _output = output;
     }
 
@@ -20,9 +21,8 @@ public class BreakfastItemTests {
         new MvcFunctionalTestFixture<Startup>(_output)
             .WhenCreating("BreakfastItem", out CreateOrUpdateBreakfastItemRequest request)
             .ShouldReturnSuccessfulStatus()
-            .JsonResultShould<BreakfastItem>(r => r.Id.Should().Be(1),
-                                                r => r.Name.Should().Be(request.Name),
-                                                r => r.Rating.Should().Be(request.Rating))
+            .ShouldReturnEquivalentJson<BreakfastItem, CreateOrUpdateBreakfastItemRequest>(request)
+            .ShouldReturnJson<BreakfastItem>(r => r.Id.Should().NotBeNullOrEmpty())
             .RunAsync();
 }
 ```
@@ -39,7 +39,7 @@ Configures the test server to use the specified startup class and to send all lo
 .WhenCreating("BreakfastItem", out CreateOrUpdateBreakfastItemRequest request)
 ```
 
-Configures the fixture to send a POST /BreakfastItem request to the test server once it's up and running. We're also asking the fixture to use AutoFixture to create a new instance of the request class and return it to us in an out parameter.
+Configures the fixture to send a `POST /BreakfastItem` request to the test server once it's up and running. We're also asking the fixture to use [AutoFixture](https://github.com/AutoFixture/AutoFixture) to create a new instance of the request class and return it to us in an out parameter.
 
 ```C#
 .ShouldReturnSuccessfulStatus()
@@ -48,12 +48,11 @@ Configures the fixture to send a POST /BreakfastItem request to the test server 
 Adds an assertion to the fixture that the response has a successful (2xx) code.
 
 ```C#
-.JsonResultShould<BreakfastItem>(r => r.Id.Should().Be(1),
-                                 r => r.Name.Should().Be(request.Name),
-                                 r => r.Rating.Should().Be(request.Rating))
+.ShouldReturnEquivalentJson<BreakfastItem, CreateOrUpdateBreakfastItemRequest>(request)
+.ShouldReturnJson<BreakfastItem>(r => r.Id.Should().NotBeNullOrEmpty())
 ```
 
-Adds an assertion to the fixture that the response body can be deserialized to an instance of BreakfastItem, that it's id property is 1 and that it's name and rating properties match those of the request.
+Both of these add an assertion to the fixture that the response body is JSON that can be deserialized to an instance of `BreakfastItem`. The first line adds an assertion that the deserialized response is equivalent to the request object according to [FluentAssertions](https://github.com/fluentassertions/fluentassertions) amazing equivalence feature. The second line adds an assertion that the `Id` property of the response has been set to something other than null or the empty string.
 
 ```C#
 .RunAsync();
@@ -62,9 +61,9 @@ Adds an assertion to the fixture that the response body can be deserialized to a
 This actually runs the fixture. The configuration will mean that it will:
 
 1. Create a new test server to host the API that we're testing.
-2. Send a POST /BreakfastItem request to the API with a JSON request body.
+2. Send a `POST /BreakfastItem` request to the API with a JSON request body serialized from the generated `CreateOrUpdateBreakfastItemRequest`.
 3. Assert that the response has a successful (2xx) code.
-4. Attempt to deserialize the response body and run assertions on the deserialized object.
+4. Attempt to deserialize the response body as a `BreakfastItem` and run assertions on the deserialized object.
 5. If no exceptions are thrown, do nothing and let the test pass. Otherwise:
    * If one exception is thrown => re-throw the exception.
    * If multiple exceptions are thrown => throw an aggregate exception containing all thrown exceptions.
