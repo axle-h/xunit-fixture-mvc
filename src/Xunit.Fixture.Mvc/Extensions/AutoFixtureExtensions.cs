@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Linq.Expressions;
+using AutoFixture;
 using AutoFixture.Dsl;
+using AutoFixture.Kernel;
 using Bogus;
 
 namespace Xunit.Fixture.Mvc.Extensions
@@ -54,6 +56,18 @@ namespace Xunit.Fixture.Mvc.Extensions
                 info.SetValue(x, value);
                 normalizedInfo.SetValue(x, value.Normalize().ToUpper());
             });
+        }
+
+        /// <summary>
+        /// Adds the specified behavior to the auto fixture instance.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="behavior">The behavior.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingAutoFixtureBehavior(this IMvcFunctionalTestFixture fixture, ISpecimenBuilderTransformation behavior)
+        {
+            fixture.AutoFixture.Behaviors.Add(behavior);
+            return fixture;
         }
     }
 }

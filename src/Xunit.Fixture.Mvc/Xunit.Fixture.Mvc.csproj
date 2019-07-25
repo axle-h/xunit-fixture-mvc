@@ -13,10 +13,7 @@
     <PackageProjectUrl>https://github.com/axle-h/xunit-fixture-mvc</PackageProjectUrl>
     <IsPackable>true</IsPackable>
     <OutputType>Library</OutputType>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <DocumentationFile>bin\Release\netstandard2.0\Xunit.Fixture.Mvc.xml</DocumentationFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

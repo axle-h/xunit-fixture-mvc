@@ -7,6 +7,7 @@ using AutoFixture;
 using AutoFixture.Dsl;
 using AutoFixture.Kernel;
 using Bogus;
+using Microsoft.Extensions.Logging;
 
 namespace Xunit.Fixture.Mvc.Extensions
 {
@@ -59,7 +60,7 @@ namespace Xunit.Fixture.Mvc.Extensions
             mutationFunc?.Invoke(model);
             return fixture;
         }
-        
+
         /// <summary>
         /// Creates an auto fixture constructed instance of the specified model.
         /// </summary>
@@ -70,10 +71,10 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <returns></returns>
         public static IMvcFunctionalTestFixture HavingModel<TModel>(this IMvcFunctionalTestFixture fixture,
                                                                     out TModel model,
-                                                                    Action<TModel> configurator = null)
+                                                                    Action<Faker, TModel> configurator = null)
         {
             model = fixture.AutoFixture.Create<TModel>();
-            configurator?.Invoke(model);
+            configurator?.Invoke(fixture.Faker, model);
             return fixture;
         }
 
@@ -87,7 +88,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <returns></returns>
         public static IMvcFunctionalTestFixture HavingModels<TModel>(this IMvcFunctionalTestFixture fixture,
                                                                      out ICollection<TModel> models,
-                                                                     Action<TModel> configurator = null)
+                                                                     Action<Faker, TModel> configurator = null)
         {
             models = fixture.AutoFixture.CreateMany<TModel>().ToList();
 
@@ -95,7 +96,7 @@ namespace Xunit.Fixture.Mvc.Extensions
             {
                 foreach (var model in models)
                 {
-                    configurator(model);
+                    configurator(fixture.Faker, model);
                 }
             }
 
@@ -167,5 +168,15 @@ namespace Xunit.Fixture.Mvc.Extensions
                 bootstrapAction(p);
                 return Task.CompletedTask;
             });
+
+        /// <summary>
+        /// Sets the log minimum level.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="logLevel">The log level.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingMinimumLogLevel(this IMvcFunctionalTestFixture fixture, LogLevel logLevel) =>
+            fixture.HavingLogging(x => x.SetMinimumLevel(logLevel));
     }
+
 }

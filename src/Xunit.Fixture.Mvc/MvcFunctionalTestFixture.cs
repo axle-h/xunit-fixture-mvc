@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading.Tasks;
 using AutoFixture;
 using Bogus;
@@ -12,7 +14,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Newtonsoft.Json;
 using Xunit.Abstractions;
 using Xunit.Fixture.Mvc.Infrastructure;
 
@@ -31,11 +32,11 @@ namespace Xunit.Fixture.Mvc
         private readonly IServiceCollection _extraServices = new ServiceCollection();
 
         private readonly IList<Action<ITestOutputHelper, IConfigurationBuilder>> _configurationBuilderDelegates = new List<Action<ITestOutputHelper, IConfigurationBuilder>>();
-
+        
         private readonly IList<Action<WebApplicationFactoryClientOptions>> _clientConfigurationDelegates = new List<Action<WebApplicationFactoryClientOptions>>();
 
         private readonly IList<Action<HttpResponseMessage>> _responseAssertions = new List<Action<HttpResponseMessage>>();
-
+        
         private readonly IList<(Func<string, object> deserializer, IList<Action<object>> assertions)> _resultAssertions =
             new List<(Func<string, object> deserializer, IList<Action<object>> assertions)>();
 
@@ -43,8 +44,10 @@ namespace Xunit.Fixture.Mvc
 
         private readonly HttpRequestMessage _message = new HttpRequestMessage();
 
+        private readonly IList<Action<ILoggingBuilder>> _loggerConfigurators = new List<Action<ILoggingBuilder>>();
+
+        private bool _run;
         private bool _actStepConfigured;
-        private LogLevel _minimumLogLevel = LogLevel.Debug;
         private string _environment;
 
         /// <summary>
@@ -55,6 +58,18 @@ namespace Xunit.Fixture.Mvc
         {
             _output = output;
             HavingServices(services => services.AddSingleton(new MvcFunctionalTestFixtureHttpRequestMessage(_message)));
+        }
+
+        /// <summary>
+        /// Finalizes an instance of the <see cref="MvcFunctionalTestFixture{TStartup}"/> class.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Did not call {nameof(RunAsync)}</exception>
+        ~MvcFunctionalTestFixture()
+        {
+            if (!_run)
+            {
+                throw new InvalidOperationException($"Did not call {nameof(RunAsync)}");
+            }
         }
 
         /// <summary>
@@ -196,11 +211,12 @@ namespace Xunit.Fixture.Mvc
             where TService : class => FluentSetup(() => _postRequestAssertions.Add((typeof(TService), o => assertion((TService)o))));
 
         /// <summary>
-        /// Sets the log minimum level.
+        /// Configured the logger factory that will be used by the test server and fixture.
         /// </summary>
-        /// <param name="logLevel">The log level.</param>
+        /// <param name="loggerConfigurator">The logger configurator.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingMinimumLogLevel(LogLevel logLevel) => FluentSetup(() => _minimumLogLevel = logLevel);
+        public IMvcFunctionalTestFixture HavingLogging(Action<ILoggingBuilder> loggerConfigurator) =>
+            FluentSetup(() => _loggerConfigurators.Add(loggerConfigurator));
 
         /// <summary>
         /// Runs this fixture.
@@ -213,25 +229,28 @@ namespace Xunit.Fixture.Mvc
                 throw new InvalidOperationException($"Must call {nameof(When)} to configure an HTTP request");
             }
 
+            _run = true;
+
             using (var loggerProvider = _output == null ? NullLoggerProvider.Instance as ILoggerProvider : new TestOutputHelperLoggerProvider(_output))
-            using (var factory = new FixtureWebApplicationFactory(_output, loggerProvider, _environment, _extraServices, _configurationBuilderDelegates, _clientConfigurationDelegates, _minimumLogLevel))
+            using (var factory = new FixtureWebApplicationFactory(_output, loggerProvider, _environment, _extraServices, _configurationBuilderDelegates, _clientConfigurationDelegates, _loggerConfigurators))
             using (var client = factory.CreateClient()) // this actually builds the test server.
             {
-                var logger = loggerProvider.CreateLogger(GetType().ToString());
+                var logger = factory.Server.Host.Services.GetService<ILogger<MvcFunctionalTestFixture<TStartup>>>();
 
                 // Bootstrap.
                 using (var scope = factory.Server.Host.Services.CreateScope())
                 {
                     foreach (var bootstrap in scope.ServiceProvider.GetService<IEnumerable<ITestServerBootstrap>>())
                     {
-                        logger.LogInformation($"Bootstrapping {bootstrap.GetType()}");
+                        logger.LogDebug($"Bootstrapping {bootstrap.GetType()}");
                         await bootstrap.BootstrapAsync();
                     }
                 }
 
                 using (var aggregator = new ExceptionAggregator())
                 {
-                    logger.LogInformation($"Sending request {_message}");
+                    var requestBody = await (_message.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
+                    logger.LogInformation($"Sending request {_message}\n{requestBody ?? "<no body>"}");
                     var response = await client.SendAsync(_message);
 
                     // Response assertions.
@@ -241,8 +260,8 @@ namespace Xunit.Fixture.Mvc
                     }
 
                     // Response body (result) assertions.
-                    var responseBody = await response.Content.ReadAsStringAsync();
-                    logger.LogInformation("Received: " + responseBody);
+                    var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
+                    logger.LogInformation($"Received {response}\n{responseBody ?? "<no body>"}");
 
                     foreach (var (deserializer, assertions) in _resultAssertions)
                     {
@@ -267,13 +286,25 @@ namespace Xunit.Fixture.Mvc
                         {
                             foreach (var (serviceType, assertion) in _postRequestAssertions)
                             {
-                                logger.LogInformation($"Running post request assertion on service: {serviceType}");
+                                logger.LogDebug($"Running post request assertion on service: {serviceType}");
                                 var service = scope.ServiceProvider.GetRequiredService(serviceType);
                                 await aggregator.TryAsync(() => assertion(service));
                             }
                         }
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Gets the content root of the startup class.
+        /// </summary>
+        /// <returns></returns>
+        public string GetContentRoot()
+        {
+            using (var factory = new GetContentRootWebApplicationFactory())
+            {
+                return factory.GetContentRoot();
             }
         }
 
@@ -290,7 +321,7 @@ namespace Xunit.Fixture.Mvc
             private readonly string _environment;
             private readonly IServiceCollection _extraServices;
             private readonly IEnumerable<Action<ITestOutputHelper, IConfigurationBuilder>> _configurationBuilderDelegates;
-            private readonly LogLevel _minimumLogLevel;
+            private readonly IEnumerable<Action<ILoggingBuilder>> _loggerConfigurators;
 
             public FixtureWebApplicationFactory(ITestOutputHelper output,
                                                 ILoggerProvider loggerProvider,
@@ -298,14 +329,14 @@ namespace Xunit.Fixture.Mvc
                                                 IServiceCollection extraServices,
                                                 IEnumerable<Action<ITestOutputHelper, IConfigurationBuilder>> configurationBuilderDelegates,
                                                 IEnumerable<Action<WebApplicationFactoryClientOptions>> clientConfigurationDelegates,
-                                                LogLevel minimumLogLevel)
+                                                IEnumerable<Action<ILoggingBuilder>> loggerConfigurators)
             {
                 _output = output;
                 _loggerProvider = loggerProvider;
                 _environment = environment;
                 _extraServices = extraServices;
                 _configurationBuilderDelegates = configurationBuilderDelegates;
-                _minimumLogLevel = minimumLogLevel;
+                _loggerConfigurators = loggerConfigurators;
 
                 foreach (var configurator in clientConfigurationDelegates)
                 {
@@ -316,21 +347,66 @@ namespace Xunit.Fixture.Mvc
             protected override void ConfigureWebHost(IWebHostBuilder builder)
             {
                 builder.ConfigureAppConfiguration(configurationBuilder =>
-                {
-                    foreach (var action in _configurationBuilderDelegates)
                     {
-                        action(_output, configurationBuilder);
+                        foreach (var action in _configurationBuilderDelegates)
+                        {
+                            action(_output, configurationBuilder);
+                        }
+                    })
+                    .UseEnvironment(_environment ?? EnvironmentName.Production)
+                    .ConfigureLogging(b =>
+                    {
+                        b.AddProvider(_loggerProvider);
+
+                        foreach (var configurator in _loggerConfigurators)
+                        {
+                            configurator(b);
+                        }
+                    })
+                    .ConfigureServices(services =>
+                    {
+                        foreach (var service in _extraServices)
+                        {
+                            services.Add(service);
+                        }
+                    });
+            }
+        }
+
+        private class GetContentRootWebApplicationFactory : WebApplicationFactory<TStartup>
+        {
+            public string GetContentRoot()
+            {
+                var metadataAttributes = GetContentRootMetadataAttributes();
+
+                foreach (var contentRootAttribute in metadataAttributes)
+                {
+                    var contentRootCandidate = Path.Combine(AppContext.BaseDirectory,
+                                                            contentRootAttribute.ContentRootPath);
+
+                    var contentRootMarker = Path.Combine(contentRootCandidate,
+                                                         Path.GetFileName(contentRootAttribute.ContentRootTest));
+
+                    if (File.Exists(contentRootMarker))
+                    {
+                        return contentRootCandidate;
                     }
-                })
-                       .UseEnvironment(_environment ?? EnvironmentName.Production)
-                       .ConfigureLogging(b => b.SetMinimumLevel(_minimumLogLevel).AddProvider(_loggerProvider))
-                       .ConfigureServices(services =>
-                       {
-                           foreach (var service in _extraServices)
-                           {
-                               services.Add(service);
-                           }
-                       });
+                }
+
+                throw new InvalidOperationException("Must properly reference xunit-fixture-mvc");
+            }
+
+            private WebApplicationFactoryContentRootAttribute[] GetContentRootMetadataAttributes()
+            {
+                var tEntryPointAssemblyFullName = typeof(TStartup).Assembly.FullName;
+                var tEntryPointAssemblyName = typeof(TStartup).Assembly.GetName().Name;
+
+                var testAssembly = GetTestAssemblies();
+                return testAssembly.SelectMany(a => a.GetCustomAttributes<WebApplicationFactoryContentRootAttribute>())
+                                   .Where(a => string.Equals(a.Key, tEntryPointAssemblyFullName, StringComparison.OrdinalIgnoreCase) ||
+                                               string.Equals(a.Key, tEntryPointAssemblyName, StringComparison.OrdinalIgnoreCase))
+                                   .OrderBy(a => a.Priority)
+                                   .ToArray();
             }
         }
     }

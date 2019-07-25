@@ -124,16 +124,22 @@ namespace Xunit.Fixture.Mvc
             where TService : class;
 
         /// <summary>
-        /// Sets the log minimum level.
+        /// Configured the logger factory that will be used by the test server and fixture.
         /// </summary>
-        /// <param name="logLevel">The log level.</param>
+        /// <param name="loggerConfigurator">The logger configurator.</param>
         /// <returns></returns>
-        IMvcFunctionalTestFixture HavingMinimumLogLevel(LogLevel logLevel);
+        IMvcFunctionalTestFixture HavingLogging(Action<ILoggingBuilder> loggerConfigurator);
 
         /// <summary>
         /// Runs this fixture.
         /// </summary>
         /// <returns></returns>
         Task RunAsync();
+
+        /// <summary>
+        /// Gets the content root of the startup class.
+        /// </summary>
+        /// <returns></returns>
+        string GetContentRoot();
     }
 }
