@@ -7,7 +7,7 @@
     <Authors>Alex Haslehurst</Authors>
     <Description>MVC functional tests with a fixture pattern</Description>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageTags>test;testing;fixture;functional</PackageTags>
+    <PackageTags>test testing fixture functional</PackageTags>
     <IncludeSymbols>true</IncludeSymbols>
     <IncludeSource>true</IncludeSource>
     <PackageProjectUrl>https://github.com/axle-h/xunit-fixture-mvc</PackageProjectUrl>
@@ -17,9 +17,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoFixture" Version="4.6.0" />
-    <PackageReference Include="Bogus" Version="25.0.3" />
-    <PackageReference Include="FluentAssertions" Version="5.5.3" />
+    <PackageReference Include="AutoFixture" Version="4.11.0" />
+    <PackageReference Include="Bogus" Version="28.0.2" />
+    <PackageReference Include="FluentAssertions" Version="5.7.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="2.2.0" />
     <PackageReference Include="xunit.core" Version="2.4.1" />
   </ItemGroup>

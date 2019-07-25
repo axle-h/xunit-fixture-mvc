@@ -1,4 +1,4 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/uma3136e7kwbcj94/branch/master?svg=true)](https://ci.appveyor.com/project/axle-h/xunit-fixture-mvc/branch/master)
+[![CircleCI](https://circleci.com/gh/axle-h/xunit-fixture-mvc/tree/master.svg?style=svg)](https://circleci.com/gh/axle-h/xunit-fixture-mvc/tree/master)
 [![NuGet](https://img.shields.io/nuget/v/xunit.fixture.mvc.svg)](https://www.nuget.org/packages/xunit.fixture.mvc)
 
 # xunit-fixture-mvc
