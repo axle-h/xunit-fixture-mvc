@@ -63,7 +63,6 @@ namespace Xunit.Fixture.Mvc
         /// <summary>
         /// Finalizes an instance of the <see cref="MvcFunctionalTestFixture{TStartup}"/> class.
         /// </summary>
-        /// <exception cref="InvalidOperationException">Did not call {nameof(RunAsync)}</exception>
         ~MvcFunctionalTestFixture()
         {
             if (!_run)

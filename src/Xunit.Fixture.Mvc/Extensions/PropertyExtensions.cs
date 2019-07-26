@@ -86,5 +86,21 @@ namespace Xunit.Fixture.Mvc.Extensions
 
             throw new ArgumentException($"Test fixture property with key: {key} is not a {typeof(TProperty)}");
         }
+
+        /// <summary>
+        /// Runs the specified property action for the property of the specified type with the specified key.
+        /// </summary>
+        /// <typeparam name="TProperty">The type of the property.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="key">The key.</param>
+        /// <param name="propertyAction">The property action.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture HavingConfiguredProperty<TProperty>(this IMvcFunctionalTestFixture fixture,
+            string key,
+            Action<TProperty> propertyAction)
+        {
+            propertyAction(fixture.GetProperty<TProperty>(key));
+            return fixture;
+        }
     }
 }
