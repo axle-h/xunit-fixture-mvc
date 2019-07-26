@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using FluentAssertions;
 using FluentAssertions.Equivalency;
@@ -25,12 +26,17 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <summary>
         /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
         /// </summary>
+        /// <typeparam name="TResponseModel">The type of the response model.</typeparam>
         /// <typeparam name="TModel">The type of the model.</typeparam>
         /// <param name="fixture">The fixture.</param>
         /// <param name="model">The model.</param>
+        /// <param name="options">The equivalency assertion options.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnEquivalentJson<TModel>(this IMvcFunctionalTestFixture fixture, TModel model) =>
-            fixture.ShouldReturnJson<TModel>(r => r.Should().BeEquivalentTo(model));
+        public static IMvcFunctionalTestFixture ShouldReturnEquivalentJson<TResponseModel, TModel>(
+            this IMvcFunctionalTestFixture fixture,
+            TModel model,
+            Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
+            fixture.ShouldReturnJson<TResponseModel>(x => x.Should().BeEquivalentTo(model, options ?? (c => c)));
 
         /// <summary>
         /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
@@ -40,35 +46,11 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="model">The model.</param>
         /// <param name="options">The equivalency assertion options.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnEquivalentJson<TModel>(this IMvcFunctionalTestFixture fixture,
-                                                                                   TModel model,
-                                                                                   Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options) =>
-            fixture.ShouldReturnJson<TModel>(r => r.Should().BeEquivalentTo(model, options));
-
-        /// <summary>
-        /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
-        /// </summary>
-        /// <typeparam name="TResponseModel">The type of the response model.</typeparam>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnEquivalentJson<TResponseModel, TModel>(this IMvcFunctionalTestFixture fixture, TModel model) =>
-            fixture.ShouldReturnJson<TResponseModel>(x => x.Should().BeEquivalentTo(model));
-
-        /// <summary>
-        /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
-        /// </summary>
-        /// <typeparam name="TResponseModel">The type of the response model.</typeparam>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <param name="model">The model.</param>
-        /// <param name="options">The equivalency assertion options.</param>
-        /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnEquivalentJson<TResponseModel, TModel>(this IMvcFunctionalTestFixture fixture,
-                                                                                                   TModel model,
-                                                                                                   Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options) =>
-            fixture.ShouldReturnJson<TResponseModel>(x => x.Should().BeEquivalentTo(model, options));
+        public static IMvcFunctionalTestFixture ShouldReturnEquivalentJson<TModel>(
+            this IMvcFunctionalTestFixture fixture,
+            TModel model,
+            Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
+            fixture.ShouldReturnEquivalentJson<TModel, TModel>(model, options);
 
         /// <summary>
         /// Adds an assertion to the specified fixture that the JSON result returned will be an empty collection.
@@ -87,6 +69,64 @@ namespace Xunit.Fixture.Mvc.Extensions
         public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionOfLength(this IMvcFunctionalTestFixture fixture, int count) =>
             fixture.ShouldReturnJson<ICollection<object>>(x => x.Should().HaveCount(count));
 
+        /// <summary>
+        /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
+        /// </summary>
+        /// <typeparam name="TResponseModel">The type of the response model.</typeparam>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="model">The model.</param>
+        /// <param name="options">The options.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TResponseModel, TModel>(
+            this IMvcFunctionalTestFixture fixture,
+            TModel model,
+            Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
+            fixture.ShouldReturnJson<ICollection<TResponseModel>>(x => x.Should().ContainEquivalentOf(model, options ?? (c => c)));
+
+        /// <summary>
+        /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
+        /// </summary>
+        /// <typeparam name="TResponseModel">The type of the response model.</typeparam>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="models">The models.</param>
+        /// <param name="options">The options.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TResponseModel, TModel>(
+            this IMvcFunctionalTestFixture fixture,
+            ICollection<TModel> models,
+            Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
+            fixture.ShouldReturnJson(models.Select<TModel, Action<ICollection<TResponseModel>>>(e =>
+                    x => x.Should().ContainEquivalentOf(e, options ?? (c => c)))
+                .ToArray());
+
+        /// <summary>
+        /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
+        /// </summary>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="model">The model.</param>
+        /// <param name="options">The options.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TModel>(this IMvcFunctionalTestFixture fixture,
+            TModel model,
+            Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
+            fixture.ShouldReturnJsonCollectionContainingEquivalent<TModel, TModel>(model, options);
+
+        /// <summary>
+        /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
+        /// </summary>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="models">The models.</param>
+        /// <param name="options">The options.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TModel>(this IMvcFunctionalTestFixture fixture,
+            ICollection<TModel> models,
+            Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
+            fixture.ShouldReturnJsonCollectionContainingEquivalent<TModel, TModel>(models, options);
+        
         /// <summary>
         /// Adds an assert step that the HTTP response had a success status code i.e. 2xx.
         /// </summary>
