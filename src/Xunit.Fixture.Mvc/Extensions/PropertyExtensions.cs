@@ -88,18 +88,19 @@ namespace Xunit.Fixture.Mvc.Extensions
         }
 
         /// <summary>
-        /// Runs the specified property action for the property of the specified type with the specified key.
+        /// Gets the property of the specified type with the specified key.
         /// </summary>
         /// <typeparam name="TProperty">The type of the property.</typeparam>
         /// <param name="fixture">The fixture.</param>
         /// <param name="key">The key.</param>
-        /// <param name="propertyAction">The property action.</param>
+        /// <param name="property">The property.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture HavingConfiguredProperty<TProperty>(this IMvcFunctionalTestFixture fixture,
+        public static IMvcFunctionalTestFixture HavingConfiguredProperty<TProperty>(
+            this IMvcFunctionalTestFixture fixture,
             string key,
-            Action<TProperty> propertyAction)
+            out TProperty property)
         {
-            propertyAction(fixture.GetProperty<TProperty>(key));
+            property = fixture.GetProperty<TProperty>(key);
             return fixture;
         }
     }

@@ -11,7 +11,7 @@ namespace Xunit.Fixture.Mvc.Extensions
     /// <summary>
     /// Extensions for <see cref="IMvcFunctionalTestFixture"/>.
     /// </summary>
-    public static class AssertionExtensions
+    public static class ResponseAssertionExtensions
     {
         /// <summary>
         /// Adds assertions that will be run on the HTTP, JSON response body.
@@ -21,7 +21,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="assertions">The assertions.</param>
         /// <returns></returns>
         public static IMvcFunctionalTestFixture ShouldReturnJson<TModel>(this IMvcFunctionalTestFixture fixture, params Action<TModel>[] assertions) =>
-            fixture.ShouldReturn(JsonConvert.DeserializeObject<TModel>, assertions);
+            fixture.ShouldReturnBody(JsonConvert.DeserializeObject<TModel>, assertions);
 
         /// <summary>
         /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
@@ -133,7 +133,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="fixture">The fixture.</param>
         /// <returns></returns>
         public static IMvcFunctionalTestFixture ShouldReturnSuccessfulStatus(this IMvcFunctionalTestFixture fixture) =>
-            fixture.ResponseShould(r => r.EnsureSuccessStatusCode());
+            fixture.ShouldReturn(r => r.EnsureSuccessStatusCode());
 
         /// <summary>
         /// Adds an assert step that the HTTP response was a permanent redirect (301) to the specified url.
@@ -212,10 +212,10 @@ namespace Xunit.Fixture.Mvc.Extensions
             => fixture.ShouldReturnStatus(HttpStatusCode.InternalServerError);
 
         private static IMvcFunctionalTestFixture ShouldReturnStatus(this IMvcFunctionalTestFixture fixture, HttpStatusCode statusCode) =>
-            fixture.ResponseShould(r => r.StatusCode.Should().Be(statusCode));
+            fixture.ShouldReturn(r => r.StatusCode.Should().Be(statusCode));
 
         private static IMvcFunctionalTestFixture ShouldReturnRedirect(this IMvcFunctionalTestFixture fixture, HttpStatusCode statusCode, string redirectUrl) =>
-            fixture.ResponseShould(r => r.StatusCode.Should().Be(statusCode),
+            fixture.ShouldReturn(r => r.StatusCode.Should().Be(statusCode),
                                    r => r.Headers.Location.Should().Be(redirectUrl));
     }
 }

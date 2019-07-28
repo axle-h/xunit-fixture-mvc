@@ -8,9 +8,54 @@ namespace Xunit.Fixture.Mvc.Extensions
     /// <summary>
     /// Extensions for configuring an <see cref="IMvcFunctionalTestFixture"/>.
     /// </summary>
-    public static class RestExtensions
+    public static class RestActExtensions
     {
         private static readonly HttpMethod Patch = new HttpMethod("PATCH");
+
+        /// <summary>
+        /// Configures the fixture perform the specified HTTP action.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="method">The HTTP method.</param>
+        /// <param name="uri">The URI.</param>
+        /// <param name="content">The HTTP content.</param>
+        public static IMvcFunctionalTestFixture When(this IMvcFunctionalTestFixture fixture, HttpMethod method, string uri, HttpContent content) =>
+            fixture.When(message =>
+            {
+                message.Method = method;
+                message.RequestUri = new Uri(uri, UriKind.Relative);
+                message.Content = content;
+            });
+
+        /// <summary>
+        /// Configures the specified fixture's act step to be an HTTP request with the specified method, url and body.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="method">The method.</param>
+        /// <param name="url">The URL.</param>
+        /// <param name="body">The body.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture WhenCallingRestMethod(this IMvcFunctionalTestFixture fixture, HttpMethod method, string url, object body = null)
+        {
+            var content = body == null ? null : new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            return fixture.When(method, url, content);
+        }
+
+        /// <summary>
+        /// Configures the specified fixture's act step to be an HTTP request with the specified method, url and body.
+        /// </summary>
+        /// <typeparam name="TModel">The type of the model.</typeparam>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="method">The method.</param>
+        /// <param name="url">The URL.</param>
+        /// <param name="model">The model.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture WhenCallingRestMethod<TModel>(this IMvcFunctionalTestFixture fixture,
+                                                                              HttpMethod method,
+                                                                              string url,
+                                                                              out TModel model) =>
+            fixture.HavingModel(out model)
+                   .WhenCallingRestMethod(method, url, model);
 
         /// <summary>
         /// Configures the specified fixture's act step to be a GET request at the specified url.
@@ -123,35 +168,5 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <returns></returns>
         public static IMvcFunctionalTestFixture WhenDeleting<TId>(this IMvcFunctionalTestFixture fixture, string entity, TId id) =>
             fixture.WhenCallingRestMethod(HttpMethod.Delete, $"{entity}/{Uri.EscapeDataString(id.ToString())}");
-
-        /// <summary>
-        /// Configures the specified fixture's act step to be an HTTP request with the specified method, url and body.
-        /// </summary>
-        /// <param name="fixture">The fixture.</param>
-        /// <param name="method">The method.</param>
-        /// <param name="url">The URL.</param>
-        /// <param name="body">The body.</param>
-        /// <returns></returns>
-        public static IMvcFunctionalTestFixture WhenCallingRestMethod(this IMvcFunctionalTestFixture fixture, HttpMethod method, string url, object body = null)
-        {
-            var content = body == null ? null : new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
-            return fixture.When(method, url, content);
-        }
-
-        /// <summary>
-        /// Configures the specified fixture's act step to be an HTTP request with the specified method, url and body.
-        /// </summary>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <param name="method">The method.</param>
-        /// <param name="url">The URL.</param>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        public static IMvcFunctionalTestFixture WhenCallingRestMethod<TModel>(this IMvcFunctionalTestFixture fixture,
-                                                                              HttpMethod method,
-                                                                              string url,
-                                                                              out TModel model) =>
-            fixture.HavingModel(out model)
-                   .WhenCallingRestMethod(method, url, model);
     }
 }
