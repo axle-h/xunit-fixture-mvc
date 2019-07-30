@@ -11,8 +11,26 @@ namespace Xunit.Fixture.Mvc.Extensions
     /// <summary>
     /// Extensions for <see cref="IMvcFunctionalTestFixture"/>.
     /// </summary>
-    public static class AssertionExtensions
+    public static class ResponseAssertionExtensions
     {
+        /// <summary>
+        /// Adds assertions that will be run on the HTTP, raw response body.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="assertions">The assertions.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture ShouldReturnRaw(this IMvcFunctionalTestFixture fixture, params Action<string>[] assertions) =>
+            fixture.ShouldReturnBody(x => x, assertions);
+
+        /// <summary>
+        /// Adds an assertion that the response body will be the exact, specified string.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="expected">The expected.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture ShouldReturnRaw(this IMvcFunctionalTestFixture fixture, string expected) =>
+            fixture.ShouldReturnRaw(x => x.Should().Be(expected));
+
         /// <summary>
         /// Adds assertions that will be run on the HTTP, JSON response body.
         /// </summary>
@@ -21,7 +39,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="assertions">The assertions.</param>
         /// <returns></returns>
         public static IMvcFunctionalTestFixture ShouldReturnJson<TModel>(this IMvcFunctionalTestFixture fixture, params Action<TModel>[] assertions) =>
-            fixture.ShouldReturn(JsonConvert.DeserializeObject<TModel>, assertions);
+            fixture.ShouldReturnBody(JsonConvert.DeserializeObject<TModel>, assertions);
 
         /// <summary>
         /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
@@ -78,7 +96,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="model">The model.</param>
         /// <param name="options">The options.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TResponseModel, TModel>(
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalentModel<TResponseModel, TModel>(
             this IMvcFunctionalTestFixture fixture,
             TModel model,
             Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
@@ -93,7 +111,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="models">The models.</param>
         /// <param name="options">The options.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TResponseModel, TModel>(
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalentModels<TResponseModel, TModel>(
             this IMvcFunctionalTestFixture fixture,
             ICollection<TModel> models,
             Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
@@ -109,10 +127,10 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="model">The model.</param>
         /// <param name="options">The options.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TModel>(this IMvcFunctionalTestFixture fixture,
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalentModel<TModel>(this IMvcFunctionalTestFixture fixture,
             TModel model,
             Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
-            fixture.ShouldReturnJsonCollectionContainingEquivalent<TModel, TModel>(model, options);
+            fixture.ShouldReturnJsonCollectionContainingEquivalentModel<TModel, TModel>(model, options);
 
         /// <summary>
         /// Adds an assertion to the specified fixture that the JSON result will be equivalent to the specified model.
@@ -122,10 +140,10 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="models">The models.</param>
         /// <param name="options">The options.</param>
         /// <returns></returns>
-        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalent<TModel>(this IMvcFunctionalTestFixture fixture,
+        public static IMvcFunctionalTestFixture ShouldReturnJsonCollectionContainingEquivalentModels<TModel>(this IMvcFunctionalTestFixture fixture,
             ICollection<TModel> models,
             Func<EquivalencyAssertionOptions<TModel>, EquivalencyAssertionOptions<TModel>> options = null) =>
-            fixture.ShouldReturnJsonCollectionContainingEquivalent<TModel, TModel>(models, options);
+            fixture.ShouldReturnJsonCollectionContainingEquivalentModels<TModel, TModel>(models, options);
         
         /// <summary>
         /// Adds an assert step that the HTTP response had a success status code i.e. 2xx.
@@ -133,7 +151,7 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <param name="fixture">The fixture.</param>
         /// <returns></returns>
         public static IMvcFunctionalTestFixture ShouldReturnSuccessfulStatus(this IMvcFunctionalTestFixture fixture) =>
-            fixture.ResponseShould(r => r.EnsureSuccessStatusCode());
+            fixture.ShouldReturn(r => r.EnsureSuccessStatusCode());
 
         /// <summary>
         /// Adds an assert step that the HTTP response was a permanent redirect (301) to the specified url.
@@ -211,11 +229,17 @@ namespace Xunit.Fixture.Mvc.Extensions
         public static IMvcFunctionalTestFixture ShouldReturnInternalServerError(this IMvcFunctionalTestFixture fixture)
             => fixture.ShouldReturnStatus(HttpStatusCode.InternalServerError);
 
-        private static IMvcFunctionalTestFixture ShouldReturnStatus(this IMvcFunctionalTestFixture fixture, HttpStatusCode statusCode) =>
-            fixture.ResponseShould(r => r.StatusCode.Should().Be(statusCode));
+        /// <summary>
+        /// Adds an assert step that the HTTP response had the specified status code.
+        /// </summary>
+        /// <param name="fixture">The fixture.</param>
+        /// <param name="statusCode">The status code.</param>
+        /// <returns></returns>
+        public static IMvcFunctionalTestFixture ShouldReturnStatus(this IMvcFunctionalTestFixture fixture, HttpStatusCode statusCode) =>
+            fixture.ShouldReturn(r => r.StatusCode.Should().Be(statusCode));
 
         private static IMvcFunctionalTestFixture ShouldReturnRedirect(this IMvcFunctionalTestFixture fixture, HttpStatusCode statusCode, string redirectUrl) =>
-            fixture.ResponseShould(r => r.StatusCode.Should().Be(statusCode),
+            fixture.ShouldReturn(r => r.StatusCode.Should().Be(statusCode),
                                    r => r.Headers.Location.Should().Be(redirectUrl));
     }
 }

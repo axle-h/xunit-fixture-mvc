@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
-using AutoFixture;
-using Bogus;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,31 +12,21 @@ namespace Xunit.Fixture.Mvc
     /// <summary>
     /// A functional test fixture for MVC.
     /// </summary>
-    /// <seealso cref="System.IDisposable" />
-    public interface IMvcFunctionalTestFixture
+    public interface IMvcFunctionalTestFixture : ITestFixtureContext
     {
         /// <summary>
-        /// Gets the auto fixture.
+        /// Runs the specified fixture action during setup.
+        /// This will do nothing if the fixture has already been setup.
         /// </summary>
-        /// <value>
-        /// The auto fixture.
-        /// </value>
-        IFixture AutoFixture { get; }
-
-        /// <summary>
-        /// Gets the faker.
-        /// </summary>
-        Faker Faker { get; }
-
-        /// <summary>
-        /// Gets the properties.
-        /// </summary>
-        IDictionary<string, object> Properties { get; }
+        /// <param name="configurator">The configurator.</param>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture HavingSetup(Action<IMvcFunctionalTestFixture> configurator);
 
         /// <summary>
         /// Configures the host test server to use the specified environment.
         /// </summary>
         /// <param name="environment">The environment.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
         IMvcFunctionalTestFixture HavingAspNetEnvironment(string environment);
 
@@ -47,32 +34,15 @@ namespace Xunit.Fixture.Mvc
         /// Configures the host test server configuration.
         /// </summary>
         /// <param name="action">The action.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
-        IMvcFunctionalTestFixture HavingConfiguration(Action<ITestOutputHelper, IConfigurationBuilder> action);
-
-        /// <summary>
-        /// Configures an instance of the specified bootstrap service to be:
-        /// 1. Added to the test server DI container.
-        /// 2. Resolved and run once the test server is constructed.
-        /// </summary>
-        /// <typeparam name="TTestDataBootstrapService">The type of the test data bootstrap.</typeparam>
-        /// <returns></returns>
-        IMvcFunctionalTestFixture HavingBootstrap<TTestDataBootstrapService>()
-            where TTestDataBootstrapService : class, ITestServerBootstrap;
-
-        /// <summary>
-        /// Configures the specified bootstrap function to be:
-        /// 1. Added to the test server DI container.
-        /// 2. Resolved and run once the test server is constructed.
-        /// </summary>
-        /// <param name="bootstrapAction">The action to perform on the service provider during bootstrap.</param>
-        /// <returns></returns>
-        IMvcFunctionalTestFixture HavingBootstrap(Func<IServiceProvider, Task> bootstrapAction);
+        IMvcFunctionalTestFixture HavingConfiguration(Action<IConfigurationBuilder> action);
 
         /// <summary>
         /// Configures test server DI container services.
         /// </summary>
         /// <param name="servicesDelegate">The services delegate.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
         IMvcFunctionalTestFixture HavingServices(Action<IServiceCollection> servicesDelegate);
 
@@ -80,29 +50,44 @@ namespace Xunit.Fixture.Mvc
         /// Adds the specified configurator for the test server client.
         /// </summary>
         /// <param name="configurator">The configurator.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
         IMvcFunctionalTestFixture HavingClientConfiguration(Action<WebApplicationFactoryClientOptions> configurator);
+
+        /// <summary>
+        /// Configured the logger factory that will be used by the test server and fixture.
+        /// </summary>
+        /// <param name="loggerConfigurator">The logger configurator.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture HavingLogging(Action<ILoggingBuilder> loggerConfigurator);
+
+        /// <summary>
+        /// Adds a bootstrap action to the test fixture that will be run before the request.
+        /// </summary>
+        /// <param name="bootstrapFunction"></param>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture HavingBootstrap(Func<IServiceProvider, Task> bootstrapFunction);
+
+        /// <summary>
+        /// Updates the current test output helper.
+        /// </summary>
+        /// <param name="output">the test output helper.</param>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture HavingTestOutput(ITestOutputHelper output);
 
         /// <summary>
         /// Configures the HTTP request message.
         /// </summary>
         /// <param name="configurator">The configurator.</param>
         /// <returns></returns>
-        IMvcFunctionalTestFixture HavingConfiguredHttpMessage(Action<HttpRequestMessage> configurator);
-
-        /// <summary>
-        /// Configures the fixture perform the specified HTTP action.
-        /// </summary>
-        /// <param name="method">The HTTP method.</param>
-        /// <param name="uri">The URI.</param>
-        /// <param name="content">The HTTP content.</param>
-        IMvcFunctionalTestFixture When(HttpMethod method, string uri, HttpContent content);
+        IMvcFunctionalTestFixture When(Action<HttpRequestMessage> configurator);
 
         /// <summary>
         /// Adds assertions that will be run on the HTTP response.
         /// </summary>
         /// <param name="assertions">The assertions.</param>
-        IMvcFunctionalTestFixture ResponseShould(params Action<HttpResponseMessage>[] assertions);
+        IMvcFunctionalTestFixture ShouldReturn(params Action<HttpResponseMessage>[] assertions);
 
         /// <summary>
         /// Adds an assertion that the response body should be successfully deserialized using the specified deserializer
@@ -112,29 +97,48 @@ namespace Xunit.Fixture.Mvc
         /// <param name="deserializer">The deserializer.</param>
         /// <param name="assertions">The assertions.</param>
         /// <returns></returns>
-        IMvcFunctionalTestFixture ShouldReturn<TResult>(Func<string, TResult> deserializer, params Action<TResult>[] assertions);
+        IMvcFunctionalTestFixture ShouldReturnBody<TResult>(Func<string, TResult> deserializer,
+            params Action<TResult>[] assertions);
+
+        /// <summary>
+        /// Adds an assertion that the response body should be successfully deserialized using the specified deserializer
+        /// and then satisfy the specified assertion functions, which have access to the service provider.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="deserializer">The deserializer.</param>
+        /// <param name="assertions">The assertions.</param>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture ShouldReturnBody<TResult>(Func<string, TResult> deserializer,
+            params Func<IServiceProvider, TResult, Task>[] assertions);
 
         /// <summary>
         /// Adds an assertion that will be run after the request has completed, resolving a service from DI.
         /// </summary>
-        /// <typeparam name="TService">The type of the service.</typeparam>
         /// <param name="assertion">The assertion.</param>
         /// <returns></returns>
-        IMvcFunctionalTestFixture PostRequestResolvedServiceShould<TService>(Func<TService, Task> assertion)
-            where TService : class;
+        IMvcFunctionalTestFixture ShouldHaveServiceWhich(Func<IServiceProvider, Task> assertion);
 
         /// <summary>
-        /// Configured the logger factory that will be used by the test server and fixture.
+        /// Adds an assertion that a further HTTP request will be satisfied by the specified configured fixture.
         /// </summary>
-        /// <param name="loggerConfigurator">The logger configurator.</param>
+        /// <param name="contextFactory">The context function.</param>
+        /// <param name="configurator">The fixture configurator.</param>
         /// <returns></returns>
-        IMvcFunctionalTestFixture HavingLogging(Action<ILoggingBuilder> loggerConfigurator);
+        IMvcFunctionalTestFixture ShouldSatisfyRequest(Func<HttpResponseMessage, Task<object>> contextFactory,
+            Action<object, IMvcFunctionalTestFixture> configurator);
+
+        /// <summary>
+        /// Builds this test fixture.
+        /// </summary>
+        /// <returns></returns>
+        IMvcFunctionalTestFixture Build();
 
         /// <summary>
         /// Runs this fixture.
         /// </summary>
+        /// <param name="output">The test output helper.</param>
         /// <returns></returns>
-        Task RunAsync();
+        Task RunAsync(ITestOutputHelper output = null);
 
         /// <summary>
         /// Gets the content root of the startup class.

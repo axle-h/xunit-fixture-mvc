@@ -7,68 +7,65 @@ using System.Reflection;
 using System.Threading.Tasks;
 using AutoFixture;
 using Bogus;
-using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit.Abstractions;
 using Xunit.Fixture.Mvc.Infrastructure;
+using Xunit.Sdk;
 
 namespace Xunit.Fixture.Mvc
 {
     /// <summary>
-    /// A functional test fixture for MVC
+    /// A functional test fixture for MVC.
     /// </summary>
     /// <typeparam name="TStartup">The type of the startup.</typeparam>
     /// <seealso cref="IMvcFunctionalTestFixture" />
-    public class MvcFunctionalTestFixture<TStartup> : IMvcFunctionalTestFixture
+    public class MvcFunctionalTestFixture<TStartup> : WebApplicationFactory<TStartup>, IMvcFunctionalTestFixture
         where TStartup : class
     {
-        private readonly ITestOutputHelper _output;
-
         private readonly IServiceCollection _extraServices = new ServiceCollection();
 
-        private readonly IList<Action<ITestOutputHelper, IConfigurationBuilder>> _configurationBuilderDelegates = new List<Action<ITestOutputHelper, IConfigurationBuilder>>();
-        
-        private readonly IList<Action<WebApplicationFactoryClientOptions>> _clientConfigurationDelegates = new List<Action<WebApplicationFactoryClientOptions>>();
-
-        private readonly IList<Action<HttpResponseMessage>> _responseAssertions = new List<Action<HttpResponseMessage>>();
-        
-        private readonly IList<(Func<string, object> deserializer, IList<Action<object>> assertions)> _resultAssertions =
-            new List<(Func<string, object> deserializer, IList<Action<object>> assertions)>();
-
-        private readonly IList<(Type serviceType, Func<object, Task> assertion)> _postRequestAssertions = new List<(Type serviceType, Func<object, Task> assertion)>();
-
-        private readonly HttpRequestMessage _message = new HttpRequestMessage();
+        private readonly IList<Action<IConfigurationBuilder>> _configurationBuilders = new List<Action<IConfigurationBuilder>>();
 
         private readonly IList<Action<ILoggingBuilder>> _loggerConfigurators = new List<Action<ILoggingBuilder>>();
 
+        private readonly ICollection<Func<IServiceProvider, Task>> _bootstrapFunctions = new List<Func<IServiceProvider, Task>>();
+
+        private readonly IList<Assertion> _assertions = new List<Assertion>();
+
+        private readonly TestOutputHelperLoggerProvider _loggerProvider;
+        private WebApplicationFactory<TStartup> _factory;
+
         private bool _run;
-        private bool _actStepConfigured;
         private string _environment;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MvcFunctionalTestFixture{TStartup}"/> class.
         /// </summary>
         /// <param name="output">The test output helper.</param>
-        public MvcFunctionalTestFixture(ITestOutputHelper output)
+        public MvcFunctionalTestFixture(ITestOutputHelper output) : this(output, null)
         {
-            _output = output;
-            HavingServices(services => services.AddSingleton(new MvcFunctionalTestFixtureHttpRequestMessage(_message)));
+        }
+        
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MvcFunctionalTestFixture{TStartup}"/> class.
+        /// </summary>
+        /// <param name="output">The test output helper.</param>
+        /// <param name="sink">The message sink.</param>
+        internal MvcFunctionalTestFixture(ITestOutputHelper output, IMessageSink sink)
+        {
+            _loggerProvider = new TestOutputHelperLoggerProvider(sink, output);
+            HavingServices(services => services.AddSingleton<ITestFixtureContext>(this));
         }
 
-        /// <summary>
-        /// Finalizes an instance of the <see cref="MvcFunctionalTestFixture{TStartup}"/> class.
-        /// </summary>
-        ~MvcFunctionalTestFixture()
+        private MvcFunctionalTestFixture(TestOutputHelperLoggerProvider loggerProvider,
+            WebApplicationFactory<TStartup> factory)
         {
-            if (!_run)
-            {
-                throw new InvalidOperationException($"Did not call {nameof(RunAsync)}");
-            }
+            _loggerProvider = loggerProvider;
+            _factory = factory;
         }
 
         /// <summary>
@@ -90,95 +87,132 @@ namespace Xunit.Fixture.Mvc
         public IDictionary<string, object> Properties { get; } = new Dictionary<string, object>();
 
         /// <summary>
+        /// Gets the configured logger.
+        /// </summary>
+        public ILogger Logger => _loggerProvider.CreateLogger(typeof(MvcFunctionalTestFixture<TStartup>).Name);
+
+        /// <summary>
+        /// Gets the current HTTP request message.
+        /// </summary>
+        public HttpRequestMessage RequestMessage { get; private set; }
+
+        /// <summary>
+        /// Gets the current test output helper.
+        /// Or <c>null</c> if this fixture has not yet been associated with a test.
+        /// </summary>
+        public ITestOutputHelper TestOutput => _loggerProvider.TestOutput;
+
+        /// <summary>
+        /// Runs the specified fixture action during setup.
+        /// This will do nothing if the fixture has already been setup.
+        /// </summary>
+        /// <param name="configurator">The configurator.</param>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture HavingSetup(Action<IMvcFunctionalTestFixture> configurator)
+        {
+            if (_factory == null)
+            {
+                configurator(this);
+            }
+
+            return this;
+        }
+
+        /// <summary>
         /// Configures the host test server to use the specified environment.
         /// </summary>
         /// <param name="environment">The environment.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
         public IMvcFunctionalTestFixture HavingAspNetEnvironment(string environment) =>
-            FluentSetup(() => _environment = environment);
+            WithSetup(() => _environment = environment);
 
         /// <summary>
         /// Configures the host test server configuration.
         /// </summary>
         /// <param name="action">The action.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingConfiguration(Action<ITestOutputHelper, IConfigurationBuilder> action) =>
-            FluentSetup(() => _configurationBuilderDelegates.Add(action));
-
-        /// <summary>
-        /// Configures an instance of the specified bootstrap service to be:
-        /// 1. Added to the test server DI container.
-        /// 2. Resolved and run once the test server is constructed.
-        /// </summary>
-        /// <typeparam name="TTestDataBootstrapService">The type of the test data bootstrap.</typeparam>
-        /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingBootstrap<TTestDataBootstrapService>()
-            where TTestDataBootstrapService : class, ITestServerBootstrap =>
-            HavingServices(services => services.AddScoped<ITestServerBootstrap, TTestDataBootstrapService>());
-
-        /// <summary>
-        /// Configures the specified bootstrap function to be:
-        /// 1. Added to the test server DI container.
-        /// 2. Resolved and run once the test server is constructed.
-        /// </summary>
-        /// <param name="bootstrapAction">The action to perform on the service provider during bootstrap.</param>
-        /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingBootstrap(Func<IServiceProvider, Task> bootstrapAction) =>
-            HavingServices(services => services.AddScoped<ITestServerBootstrap>(provider => new SimpleTestServerBootstrap(provider, bootstrapAction)));
+        public IMvcFunctionalTestFixture HavingConfiguration(Action<IConfigurationBuilder> action) =>
+            WithSetup(() => _configurationBuilders.Add(action));
 
         /// <summary>
         /// Configures test server DI container services.
         /// </summary>
         /// <param name="servicesDelegate">The services delegate.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
         public IMvcFunctionalTestFixture HavingServices(Action<IServiceCollection> servicesDelegate) =>
-            FluentSetup(() => servicesDelegate(_extraServices));
+            WithSetup(() => servicesDelegate(_extraServices));
 
         /// <summary>
         /// Adds the specified configurator for the test server client.
         /// </summary>
         /// <param name="configurator">The configurator.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
         /// <returns></returns>
         public IMvcFunctionalTestFixture HavingClientConfiguration(Action<WebApplicationFactoryClientOptions> configurator) =>
-            FluentSetup(() => _clientConfigurationDelegates.Add(configurator));
+            WithSetup(() => configurator(ClientOptions));
+
+        /// <summary>
+        /// Configured the logger factory that will be used by the test server and fixture.
+        /// </summary>
+        /// <param name="loggerConfigurator">The logger configurator.</param>
+        /// <exception cref="InvalidOperationException">When the fixture has already been built.</exception>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture HavingLogging(Action<ILoggingBuilder> loggerConfigurator) =>
+            WithSetup(() => _loggerConfigurators.Add(loggerConfigurator));
+
+        /// <summary>
+        /// Updates the current test output helper.
+        /// </summary>
+        /// <param name="output">the test output helper.</param>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture HavingTestOutput(ITestOutputHelper output)
+        {
+            _loggerProvider.SetTestOutputHelper(output);
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a bootstrap action to the test fixture that will be run before the request.
+        /// </summary>
+        /// <param name="bootstrapFunction"></param>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture HavingBootstrap(Func<IServiceProvider, Task> bootstrapFunction)
+        {
+            _bootstrapFunctions.Add(bootstrapFunction);
+            return this;
+        }
 
         /// <summary>
         /// Configures the HTTP request message.
         /// </summary>
         /// <param name="configurator">The configurator.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingConfiguredHttpMessage(Action<HttpRequestMessage> configurator)
+        public IMvcFunctionalTestFixture When(Action<HttpRequestMessage> configurator)
         {
-            configurator(_message);
-            return this;
-        }
+            _run = false;
 
-        /// <summary>
-        /// Configures the fixture perform the specified HTTP action.
-        /// </summary>
-        /// <param name="method">The HTTP method.</param>
-        /// <param name="uri">The URI.</param>
-        /// <param name="content">The HTTP content.</param>
-        public IMvcFunctionalTestFixture When(HttpMethod method, string uri, HttpContent content)
-        {
-            _actStepConfigured = true;
-            return HavingConfiguredHttpMessage(message =>
+            if (RequestMessage == null)
             {
-                message.Method = method;
-                message.RequestUri = new Uri(uri, UriKind.Relative);
-                message.Content = content;
-            });
+                RequestMessage = new HttpRequestMessage();
+            }
+
+            configurator(RequestMessage);
+
+            return this;
         }
 
         /// <summary>
         /// Adds assertions that will be run on the HTTP response.
         /// </summary>
         /// <param name="assertions">The assertions.</param>
-        public IMvcFunctionalTestFixture ResponseShould(params Action<HttpResponseMessage>[] assertions)
+        public IMvcFunctionalTestFixture ShouldReturn(params Action<HttpResponseMessage>[] assertions)
         {
             foreach (var assertion in assertions)
             {
-                _responseAssertions.Add(assertion);
+                _assertions.Add(new ResponseAssertion { Assertion = assertion });
             }
 
             return this;
@@ -192,106 +226,214 @@ namespace Xunit.Fixture.Mvc
         /// <param name="deserializer">The deserializer.</param>
         /// <param name="assertions">The assertions.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture ShouldReturn<TResult>(Func<string, TResult> deserializer, params Action<TResult>[] assertions)
+        public IMvcFunctionalTestFixture ShouldReturnBody<TResult>(Func<string, TResult> deserializer, params Action<TResult>[] assertions)
         {
-            var objectAssertions = assertions.Select<Action<TResult>, Action<object>>(a => o => a(o.Should().BeAssignableTo<TResult>().Which))
-                                             .ToList();
-            _resultAssertions.Add((s => deserializer(s), objectAssertions));
+            _assertions.Add(new ResponseBodyAssertion
+            {
+                Deserializer = x => deserializer(x),
+                Assertions = assertions.Select<Action<TResult>, Func<IServiceProvider, object, Task>>(a =>
+                    (sp, o) =>
+                    {
+                        a((TResult) o);
+                        return Task.CompletedTask;
+                    }).ToList()
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds an assertion that the response body should be successfully deserialized using the specified deserializer
+        /// and then satisfy the specified assertion functions, which have access to the service provider.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="deserializer">The deserializer.</param>
+        /// <param name="assertions">The assertions.</param>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture ShouldReturnBody<TResult>(Func<string, TResult> deserializer, params Func<IServiceProvider, TResult, Task>[] assertions)
+        {
+            _assertions.Add(new ResponseBodyAssertion
+            {
+                Deserializer = x => deserializer(x),
+                Assertions = assertions
+                    .Select<Func<IServiceProvider, TResult, Task>, Func<IServiceProvider, object, Task>>(a =>
+                        (sp, o) => a(sp, (TResult) o)).ToList()
+            });
             return this;
         }
 
         /// <summary>
         /// Adds an assertion that will be run after the request has completed, resolving a service from DI.
         /// </summary>
-        /// <typeparam name="TService">The type of the service.</typeparam>
         /// <param name="assertion">The assertion.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture PostRequestResolvedServiceShould<TService>(Func<TService, Task> assertion)
-            where TService : class => FluentSetup(() => _postRequestAssertions.Add((typeof(TService), o => assertion((TService)o))));
+        public IMvcFunctionalTestFixture ShouldHaveServiceWhich(Func<IServiceProvider, Task> assertion)
+        {
+            _assertions.Add(new ServiceAssertion
+            {
+                Assertion = assertion
+            });
+
+            return this;
+        }
 
         /// <summary>
-        /// Configured the logger factory that will be used by the test server and fixture.
+        /// Adds an assertion that a further HTTP request will be satisfied by the specified configured fixture.
         /// </summary>
-        /// <param name="loggerConfigurator">The logger configurator.</param>
+        /// <param name="contextFactory">The context function.</param>
+        /// <param name="configurator">The fixture configurator.</param>
         /// <returns></returns>
-        public IMvcFunctionalTestFixture HavingLogging(Action<ILoggingBuilder> loggerConfigurator) =>
-            FluentSetup(() => _loggerConfigurators.Add(loggerConfigurator));
+        public IMvcFunctionalTestFixture ShouldSatisfyRequest(Func<HttpResponseMessage, Task<object>> contextFactory,
+            Action<object, IMvcFunctionalTestFixture> configurator)
+        {
+            _assertions.Add(new RequestAssertion
+            {
+                ContextFactory = contextFactory,
+                Configurator = configurator
+            });
+
+            return this;
+        }
+
+        /// <summary>
+        /// Builds this test fixture.
+        /// </summary>
+        /// <returns></returns>
+        public IMvcFunctionalTestFixture Build()
+        {
+            if (_factory != null)
+            {
+                return this;
+            }
+
+            var logger = _loggerProvider.CreateLogger(typeof(MvcFunctionalTestFixture<TStartup>).Name);
+
+            logger.LogInformation("Bootstrapping test host");
+
+            _factory = WithWebHostBuilder(builder => builder
+                .ConfigureAppConfiguration(
+                    configurationBuilder =>
+                    {
+                        foreach (var action in _configurationBuilders)
+                        {
+                            action(configurationBuilder);
+                        }
+                    })
+                .UseEnvironment(_environment ?? EnvironmentName.Production)
+                .ConfigureLogging(b =>
+                {
+                    b.AddProvider(_loggerProvider);
+
+                    foreach (var configurator in _loggerConfigurators)
+                    {
+                        configurator(b);
+                    }
+                })
+                .ConfigureServices(services =>
+                {
+                    foreach (var service in _extraServices)
+                    {
+                        services.Add(service);
+                    }
+                }));
+            
+            return this;
+        }
 
         /// <summary>
         /// Runs this fixture.
         /// </summary>
+        /// <param name="output">The test output helper.</param>
         /// <returns></returns>
-        public async Task RunAsync()
+        public async Task RunAsync(ITestOutputHelper output = null)
         {
-            if (!_actStepConfigured)
-            {
-                throw new InvalidOperationException($"Must call {nameof(When)} to configure an HTTP request");
-            }
-
             _run = true;
 
-            using (var loggerProvider = _output == null ? NullLoggerProvider.Instance as ILoggerProvider : new TestOutputHelperLoggerProvider(_output))
-            using (var factory = new FixtureWebApplicationFactory(_output, loggerProvider, _environment, _extraServices, _configurationBuilderDelegates, _clientConfigurationDelegates, _loggerConfigurators))
-            using (var client = factory.CreateClient()) // this actually builds the test server.
+            try
             {
-                var logger = factory.Server.Host.Services.GetService<ILogger<MvcFunctionalTestFixture<TStartup>>>();
-
-                // Bootstrap.
-                using (var scope = factory.Server.Host.Services.CreateScope())
+                if (RequestMessage == null)
                 {
-                    foreach (var bootstrap in scope.ServiceProvider.GetService<IEnumerable<ITestServerBootstrap>>())
-                    {
-                        logger.LogDebug($"Bootstrapping {bootstrap.GetType()}");
-                        await bootstrap.BootstrapAsync();
-                    }
+                    throw new InvalidOperationException($"Must call {nameof(When)} to configure an HTTP request");
                 }
 
-                using (var aggregator = new ExceptionAggregator())
+                if (!_assertions.Any())
                 {
-                    var requestBody = await (_message.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
-                    logger.LogInformation($"Sending request {_message}\n{requestBody ?? "<no body>"}");
-                    var response = await client.SendAsync(_message);
+                    throw new InvalidOperationException("No assertions to run");
+                }
 
-                    // Response assertions.
-                    foreach (var assertion in _responseAssertions)
+                if (output != null)
+                {
+                    _loggerProvider.SetTestOutputHelper(output);
+                }
+
+                Build();
+
+                using (var client = _factory.CreateClient())
+                {
+                    var provider = _factory.Server.Host.Services;
+
+                    // Bootstrap.
+                    if (_bootstrapFunctions.Any())
                     {
-                        aggregator.Try(() => assertion(response));
+                        using (var scope = provider.CreateScope())
+                        {
+                            foreach (var bootstrap in _bootstrapFunctions)
+                            {
+                                await bootstrap(scope.ServiceProvider);
+                            }
+                        }
                     }
 
-                    // Response body (result) assertions.
+                    var logger = provider.GetRequiredService<ILogger<MvcFunctionalTestFixture<TStartup>>>();
+
+                    var requestBody = await (RequestMessage.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
+                    logger.LogInformation($"Sending request {RequestMessage}\n{requestBody ?? "<no body>"}");
+
+                    var response = await client.SendAsync(RequestMessage);
                     var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
                     logger.LogInformation($"Received {response}\n{responseBody ?? "<no body>"}");
 
-                    foreach (var (deserializer, assertions) in _resultAssertions)
+                    var aggregator = new ExceptionAggregator();
+
+                    foreach (var assertion in _assertions)
                     {
-                        try
+                        switch (assertion)
                         {
-                            var result = deserializer(responseBody);
-                            foreach (var assertion in assertions)
-                            {
-                                aggregator.Try(() => assertion(result));
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            aggregator.Add(e);
+                            case ResponseAssertion ra:
+                                aggregator.Run(() => ra.Assertion(response));
+                                break;
+
+                            case ResponseBodyAssertion ra:
+                                if (aggregator.TryRun(() => ra.Deserializer(responseBody), out var result))
+                                {
+                                    foreach (var a in ra.Assertions)
+                                    {
+                                        await aggregator.RunAsync(() => a(provider, result));
+                                    }
+                                }
+                                break;
+
+                            case ServiceAssertion sa:
+                                using (var scope = provider.CreateScope())
+                                {
+                                    await aggregator.RunAsync(() => sa.Assertion(scope.ServiceProvider));
+                                }
+                                break;
+
+                            case RequestAssertion ra:
+                                var context = await ra.ContextFactory(response);
+                                var fixture = new MvcFunctionalTestFixture<TStartup>(_loggerProvider, _factory);
+                                ra.Configurator(context, fixture);
+                                await aggregator.RunAsync(() => fixture.RunAsync());
+                                break;
                         }
                     }
 
-                    // Post request assertions.
-                    if (_postRequestAssertions.Any())
-                    {
-                        using (var scope = factory.Server.Host.Services.CreateScope())
-                        {
-                            foreach (var (serviceType, assertion) in _postRequestAssertions)
-                            {
-                                logger.LogDebug($"Running post request assertion on service: {serviceType}");
-                                var service = scope.ServiceProvider.GetRequiredService(serviceType);
-                                await aggregator.TryAsync(() => assertion(service));
-                            }
-                        }
-                    }
+                    aggregator.ThrowIfHasExceptions();
                 }
+            }
+            finally
+            {
+                Reset();
             }
         }
 
@@ -301,112 +443,93 @@ namespace Xunit.Fixture.Mvc
         /// <returns></returns>
         public string GetContentRoot()
         {
-            using (var factory = new GetContentRootWebApplicationFactory())
+            var metadataAttributes = GetContentRootMetadataAttributes();
+
+            foreach (var contentRootAttribute in metadataAttributes)
             {
-                return factory.GetContentRoot();
+                var contentRootCandidate = Path.Combine(AppContext.BaseDirectory,
+                    contentRootAttribute.ContentRootPath);
+
+                var contentRootMarker = Path.Combine(contentRootCandidate,
+                    Path.GetFileName(contentRootAttribute.ContentRootTest));
+
+                if (File.Exists(contentRootMarker))
+                {
+                    return contentRootCandidate;
+                }
             }
+
+            throw new InvalidOperationException("Must properly reference xunit-fixture-mvc");
         }
 
-        private IMvcFunctionalTestFixture FluentSetup(Action action)
+        protected override void Dispose(bool disposing)
         {
+            if (!_run && (RequestMessage != null || _assertions.Any()))
+            {
+                throw new InvalidOperationException("This fixture has not been run");
+            }
+
+            base.Dispose(disposing);
+        }
+
+        private void Reset()
+        {
+            RequestMessage = null;
+            _assertions.Clear();
+            _bootstrapFunctions.Clear();
+        }
+
+        private WebApplicationFactoryContentRootAttribute[] GetContentRootMetadataAttributes()
+        {
+            var tEntryPointAssemblyFullName = typeof(TStartup).Assembly.FullName;
+            var tEntryPointAssemblyName = typeof(TStartup).Assembly.GetName().Name;
+
+            var testAssembly = GetTestAssemblies();
+            return testAssembly.SelectMany(a => a.GetCustomAttributes<WebApplicationFactoryContentRootAttribute>())
+                .Where(a => string.Equals(a.Key, tEntryPointAssemblyFullName, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(a.Key, tEntryPointAssemblyName, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(a => a.Priority)
+                .ToArray();
+        }
+
+        private IMvcFunctionalTestFixture WithSetup(Action action)
+        {
+            if (_factory != null)
+            {
+                throw new InvalidOperationException("Cannot configure a built test fixture");
+            }
+
             action();
             return this;
         }
 
-        private class FixtureWebApplicationFactory : WebApplicationFactory<TStartup>
+        private abstract class Assertion
         {
-            private readonly ITestOutputHelper _output;
-            private readonly ILoggerProvider _loggerProvider;
-            private readonly string _environment;
-            private readonly IServiceCollection _extraServices;
-            private readonly IEnumerable<Action<ITestOutputHelper, IConfigurationBuilder>> _configurationBuilderDelegates;
-            private readonly IEnumerable<Action<ILoggingBuilder>> _loggerConfigurators;
-
-            public FixtureWebApplicationFactory(ITestOutputHelper output,
-                                                ILoggerProvider loggerProvider,
-                                                string environment,
-                                                IServiceCollection extraServices,
-                                                IEnumerable<Action<ITestOutputHelper, IConfigurationBuilder>> configurationBuilderDelegates,
-                                                IEnumerable<Action<WebApplicationFactoryClientOptions>> clientConfigurationDelegates,
-                                                IEnumerable<Action<ILoggingBuilder>> loggerConfigurators)
-            {
-                _output = output;
-                _loggerProvider = loggerProvider;
-                _environment = environment;
-                _extraServices = extraServices;
-                _configurationBuilderDelegates = configurationBuilderDelegates;
-                _loggerConfigurators = loggerConfigurators;
-
-                foreach (var configurator in clientConfigurationDelegates)
-                {
-                    configurator(ClientOptions);
-                }
-            }
-
-            protected override void ConfigureWebHost(IWebHostBuilder builder)
-            {
-                builder.ConfigureAppConfiguration(configurationBuilder =>
-                    {
-                        foreach (var action in _configurationBuilderDelegates)
-                        {
-                            action(_output, configurationBuilder);
-                        }
-                    })
-                    .UseEnvironment(_environment ?? EnvironmentName.Production)
-                    .ConfigureLogging(b =>
-                    {
-                        b.AddProvider(_loggerProvider);
-
-                        foreach (var configurator in _loggerConfigurators)
-                        {
-                            configurator(b);
-                        }
-                    })
-                    .ConfigureServices(services =>
-                    {
-                        foreach (var service in _extraServices)
-                        {
-                            services.Add(service);
-                        }
-                    });
-            }
         }
 
-        private class GetContentRootWebApplicationFactory : WebApplicationFactory<TStartup>
+        private class ResponseAssertion : Assertion
         {
-            public string GetContentRoot()
-            {
-                var metadataAttributes = GetContentRootMetadataAttributes();
-
-                foreach (var contentRootAttribute in metadataAttributes)
-                {
-                    var contentRootCandidate = Path.Combine(AppContext.BaseDirectory,
-                                                            contentRootAttribute.ContentRootPath);
-
-                    var contentRootMarker = Path.Combine(contentRootCandidate,
-                                                         Path.GetFileName(contentRootAttribute.ContentRootTest));
-
-                    if (File.Exists(contentRootMarker))
-                    {
-                        return contentRootCandidate;
-                    }
-                }
-
-                throw new InvalidOperationException("Must properly reference xunit-fixture-mvc");
-            }
-
-            private WebApplicationFactoryContentRootAttribute[] GetContentRootMetadataAttributes()
-            {
-                var tEntryPointAssemblyFullName = typeof(TStartup).Assembly.FullName;
-                var tEntryPointAssemblyName = typeof(TStartup).Assembly.GetName().Name;
-
-                var testAssembly = GetTestAssemblies();
-                return testAssembly.SelectMany(a => a.GetCustomAttributes<WebApplicationFactoryContentRootAttribute>())
-                                   .Where(a => string.Equals(a.Key, tEntryPointAssemblyFullName, StringComparison.OrdinalIgnoreCase) ||
-                                               string.Equals(a.Key, tEntryPointAssemblyName, StringComparison.OrdinalIgnoreCase))
-                                   .OrderBy(a => a.Priority)
-                                   .ToArray();
-            }
+            public Action<HttpResponseMessage> Assertion { get; set; }
         }
+
+        private class ResponseBodyAssertion : Assertion
+        {
+            public Func<string, object> Deserializer { get; set; }
+
+            public ICollection<Func<IServiceProvider, object, Task>> Assertions { get; set; }
+        }
+
+        private class ServiceAssertion : Assertion
+        {
+            public Func<IServiceProvider, Task> Assertion { get; set; }
+        }
+
+        private class RequestAssertion : Assertion
+        {
+            public Func<HttpResponseMessage, Task<object>> ContextFactory { get; set; }
+
+            public Action<object, IMvcFunctionalTestFixture> Configurator { get; set;  }
+        }
+
     }
 }
