@@ -61,49 +61,7 @@ namespace Xunit.Fixture.Mvc.Extensions
             mutationFunc?.Invoke(model);
             return fixture;
         }
-
-        /// <summary>
-        /// Creates an auto fixture constructed instance of the specified model.
-        /// </summary>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <param name="model">The model.</param>
-        /// <param name="configurator">The configurator.</param>
-        /// <returns></returns>
-        public static IMvcFunctionalTestFixture HavingModel<TModel>(this IMvcFunctionalTestFixture fixture,
-                                                                    out TModel model,
-                                                                    Action<Faker, TModel> configurator = null)
-        {
-            model = fixture.AutoFixture.Create<TModel>();
-            configurator?.Invoke(fixture.Faker, model);
-            return fixture;
-        }
-
-        /// <summary>
-        /// Creates a collection of auto fixture constructed instances of the specified model.
-        /// </summary>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <param name="models">The models.</param>
-        /// <param name="configurator">The configurator.</param>
-        /// <returns></returns>
-        public static IMvcFunctionalTestFixture HavingModels<TModel>(this IMvcFunctionalTestFixture fixture,
-                                                                     out ICollection<TModel> models,
-                                                                     Action<Faker, TModel> configurator = null)
-        {
-            models = fixture.AutoFixture.CreateMany<TModel>().ToList();
-
-            if (configurator != null)
-            {
-                foreach (var model in models)
-                {
-                    configurator(fixture.Faker, model);
-                }
-            }
-
-            return fixture;
-        }
-
+        
         /// <summary>
         /// Uses the faker on the fixture as a factory for some fake data.
         /// </summary>
@@ -140,20 +98,6 @@ namespace Xunit.Fixture.Mvc.Extensions
         /// <returns></returns>
         public static IMvcFunctionalTestFixture HavingBearerToken(this IMvcFunctionalTestFixture fixture, string token) =>
             fixture.When(message => message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token));
-
-        /// <summary>
-        /// Adds the specified composer transformation function as an AutoFixture customization.
-        /// </summary>
-        /// <typeparam name="TModel">The type of the model.</typeparam>
-        /// <param name="fixture">The fixture.</param>
-        /// <param name="composer">The composer.</param>
-        /// <returns></returns>
-        public static IMvcFunctionalTestFixture HavingAutoFixtureCustomization<TModel>(this IMvcFunctionalTestFixture fixture,
-                                                                                       Func<ICustomizationComposer<TModel>, ISpecimenBuilder> composer)
-        {
-            fixture.AutoFixture.Customize(composer);
-            return fixture;
-        }
 
         /// <summary>
         /// Sets the log minimum level.
