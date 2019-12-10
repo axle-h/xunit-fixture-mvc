@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using Xunit.Abstractions;
 using Xunit.Fixture.Mvc.Infrastructure;
 using Xunit.Sdk;
+using HostingHostBuilderExtensions = Microsoft.Extensions.Hosting.HostingHostBuilderExtensions;
 
 namespace Xunit.Fixture.Mvc
 {
@@ -37,8 +38,9 @@ namespace Xunit.Fixture.Mvc
         private readonly IList<Assertion> _assertions = new List<Assertion>();
 
         private readonly TestOutputHelperLoggerProvider _loggerProvider;
-        private WebApplicationFactory<TStartup> _factory;
+        private readonly WebApplicationFactory<TStartup> _parent;
 
+        private bool _built;
         private bool _run;
         private string _environment;
 
@@ -49,7 +51,9 @@ namespace Xunit.Fixture.Mvc
         public MvcFunctionalTestFixture(ITestOutputHelper output) : this(output, null)
         {
         }
-        
+
+        private WebApplicationFactory<TStartup> Factory => _parent ?? this;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="MvcFunctionalTestFixture{TStartup}"/> class.
         /// </summary>
@@ -62,12 +66,12 @@ namespace Xunit.Fixture.Mvc
         }
 
         private MvcFunctionalTestFixture(TestOutputHelperLoggerProvider loggerProvider,
-            WebApplicationFactory<TStartup> factory)
+            WebApplicationFactory<TStartup> parent)
         {
             _loggerProvider = loggerProvider;
-            _factory = factory;
+            _parent = parent;
         }
-
+        
         /// <summary>
         /// Gets the auto fixture.
         /// </summary>
@@ -110,7 +114,7 @@ namespace Xunit.Fixture.Mvc
         /// <returns></returns>
         public IMvcFunctionalTestFixture HavingSetup(Action<IMvcFunctionalTestFixture> configurator)
         {
-            if (_factory == null)
+            if (!_built)
             {
                 configurator(this);
             }
@@ -300,22 +304,30 @@ namespace Xunit.Fixture.Mvc
         /// <returns></returns>
         public IMvcFunctionalTestFixture Build()
         {
-            if (_factory != null)
-            {
-                return this;
-            }
+            // Building a client builds the server.
+            using (Factory.CreateClient()) {}
+            return this;
+        }
+
+        /// <summary>
+        /// Gives a fixture an opportunity to configure the application before it gets built.
+        /// </summary>
+        /// <param name="builder">The <see cref="T:Microsoft.AspNetCore.Hosting.IWebHostBuilder" /> for the application.</param>
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            _built = true;
 
             var logger = _loggerProvider.CreateLogger(typeof(MvcFunctionalTestFixture<TStartup>).Name);
 
             logger.LogInformation("Bootstrapping test host");
 
-            _factory = WithWebHostBuilder(builder => builder
+            builder
                 .ConfigureAppConfiguration(
-                    configurationBuilder =>
+                    (ctx, b) =>
                     {
                         foreach (var action in _configurationBuilders)
                         {
-                            action(configurationBuilder);
+                            action(b);
                         }
                     })
                 .UseEnvironment(_environment ?? EnvironmentName.Production)
@@ -334,11 +346,9 @@ namespace Xunit.Fixture.Mvc
                     {
                         services.Add(service);
                     }
-                }));
-            
-            return this;
+                });
         }
-
+        
         /// <summary>
         /// Runs this fixture.
         /// </summary>
@@ -364,72 +374,66 @@ namespace Xunit.Fixture.Mvc
                 {
                     _loggerProvider.SetTestOutputHelper(output);
                 }
+                
+                using var client = Factory.CreateClient();
+                var provider = Factory.Server.Services;
 
-                Build();
-
-                using (var client = _factory.CreateClient())
+                // Bootstrap.
+                if (_bootstrapFunctions.Any())
                 {
-                    var provider = _factory.Server.Host.Services;
-
-                    // Bootstrap.
-                    if (_bootstrapFunctions.Any())
+                    using var scope = provider.CreateScope();
+                    foreach (var bootstrap in _bootstrapFunctions)
                     {
-                        using (var scope = provider.CreateScope())
-                        {
-                            foreach (var bootstrap in _bootstrapFunctions)
-                            {
-                                await bootstrap(scope.ServiceProvider);
-                            }
-                        }
+                        await bootstrap(scope.ServiceProvider);
                     }
-
-                    var logger = provider.GetRequiredService<ILogger<MvcFunctionalTestFixture<TStartup>>>();
-
-                    var requestBody = await (RequestMessage.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
-                    logger.LogInformation($"Sending request {RequestMessage}\n{requestBody ?? "<no body>"}");
-
-                    var response = await client.SendAsync(RequestMessage);
-                    var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
-                    logger.LogInformation($"Received {response}\n{responseBody ?? "<no body>"}");
-
-                    var aggregator = new ExceptionAggregator();
-
-                    foreach (var assertion in _assertions)
-                    {
-                        switch (assertion)
-                        {
-                            case ResponseAssertion ra:
-                                aggregator.Run(() => ra.Assertion(response));
-                                break;
-
-                            case ResponseBodyAssertion ra:
-                                if (aggregator.TryRun(() => ra.Deserializer(responseBody), out var result))
-                                {
-                                    foreach (var a in ra.Assertions)
-                                    {
-                                        await aggregator.RunAsync(() => a(provider, result));
-                                    }
-                                }
-                                break;
-
-                            case ServiceAssertion sa:
-                                using (var scope = provider.CreateScope())
-                                {
-                                    await aggregator.RunAsync(() => sa.Assertion(scope.ServiceProvider));
-                                }
-                                break;
-
-                            case RequestAssertion ra:
-                                var context = await ra.ContextFactory(response);
-                                var fixture = new MvcFunctionalTestFixture<TStartup>(_loggerProvider, _factory);
-                                ra.Configurator(context, fixture);
-                                await aggregator.RunAsync(() => fixture.RunAsync());
-                                break;
-                        }
-                    }
-
-                    aggregator.ThrowIfHasExceptions();
                 }
+
+                var logger = provider.GetRequiredService<ILogger<MvcFunctionalTestFixture<TStartup>>>();
+
+                var requestBody = await (RequestMessage.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
+                logger.LogInformation($"Sending request {RequestMessage}\n{requestBody ?? "<no body>"}");
+
+                var response = await client.SendAsync(RequestMessage);
+                var responseBody = await (response.Content?.ReadAsStringAsync() ?? Task.FromResult<string>(null));
+                logger.LogInformation($"Received {response}\n{responseBody ?? "<no body>"}");
+
+                var aggregator = new ExceptionAggregator();
+
+                foreach (var assertion in _assertions)
+                {
+                    switch (assertion)
+                    {
+                        case ResponseAssertion ra:
+                            aggregator.Run(() => ra.Assertion(response));
+                            break;
+
+                        case ResponseBodyAssertion ra:
+                            if (aggregator.TryRun(() => ra.Deserializer(responseBody), out var result))
+                            {
+                                foreach (var a in ra.Assertions)
+                                {
+                                    await aggregator.RunAsync(() => a(provider, result));
+                                }
+                            }
+                            break;
+
+                        case ServiceAssertion sa:
+                            using (var scope = provider.CreateScope())
+                            {
+                                await aggregator.RunAsync(() => sa.Assertion(scope.ServiceProvider));
+                            }
+                            break;
+
+                        case RequestAssertion ra:
+                            var context = await ra.ContextFactory(response);
+                            var fixture = new MvcFunctionalTestFixture<TStartup>(_loggerProvider, this);
+                            ra.Configurator(context, fixture);
+                            await aggregator.RunAsync(() => fixture.RunAsync());
+                            break;
+                    }
+                }
+
+                aggregator.ThrowIfHasExceptions();
             }
             finally
             {
@@ -494,7 +498,7 @@ namespace Xunit.Fixture.Mvc
 
         private IMvcFunctionalTestFixture WithSetup(Action action)
         {
-            if (_factory != null)
+            if (_built)
             {
                 throw new InvalidOperationException("Cannot configure a built test fixture");
             }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
@@ -35,7 +36,7 @@ namespace Xunit.Fixture.Mvc.Example.Tests
             GivenClassFixture()
                .WhenGetting("date")
                .ShouldReturnSuccessfulStatus()
-               .ShouldReturnJson<DateDto>(x => x.UtcNow.Should().BeCloseTo(DateTimeOffset.UtcNow, 1000))
+               .ShouldReturnJson<DateDto>(x => x.UtcNow.Should().BeCloseTo(DateTime.UtcNow, 1000))
                .ShouldSatisfyJsonRequest<DateDto>((r, f) => f
                    .WhenGetting("date")
                    .ShouldReturnSuccessfulStatus()
@@ -48,7 +49,7 @@ namespace Xunit.Fixture.Mvc.Example.Tests
                 .HavingConfiguredProperty(FutureOffset, out TimeSpan futureOffset)
                 .WhenGetting("date/future")
                 .ShouldReturnSuccessfulStatus()
-                .ShouldReturnJson<DateDto>(x => x.UtcNow.Should().BeCloseTo(DateTimeOffset.UtcNow.Date.Add(futureOffset), 1000))
+                .ShouldReturnJson<DateDto>(x => x.UtcNow.Should().BeCloseTo(DateTime.UtcNow.Date.Add(futureOffset), 1000))
                 .RunAsync();
     }
 

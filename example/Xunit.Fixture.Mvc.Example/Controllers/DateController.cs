@@ -18,13 +18,13 @@ namespace Xunit.Fixture.Mvc.Example.Controllers
         [HttpGet]
         public DateDto Get() => new DateDto
         {
-            UtcNow = DateTimeOffset.UtcNow
+            UtcNow = DateTime.UtcNow
         };
     
         [HttpGet("future")]
         public DateDto GetFuture() => new DateDto
         {
-            UtcNow = DateTimeOffset.UtcNow.Date.Add(_configuration.GetValue<TimeSpan>("future_offset"))
+            UtcNow = DateTime.UtcNow.Date.Add(_configuration.GetValue<TimeSpan>("future_offset"))
         };
     }
 }
